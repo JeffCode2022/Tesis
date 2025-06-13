@@ -1,0 +1,479 @@
+DOCUMENTACIÓN DE ENDPOINTS - SISTEMA ECV
+=====================================
+
+1. AUTENTICACIÓN (/api/authentication/)
+-------------------------------------
+
+1.1 Registro de Usuario
+POST /api/authentication/register/
+Body:
+{
+    "email": "doctor@hospital.com",
+    "username": "dr.smith",
+    "first_name": "John",
+    "last_name": "Smith",
+    "password": "contraseña123",
+    "password_confirm": "contraseña123",
+    "hospital": "Hospital Central",
+    "specialization": "Cardiología",
+    "license_number": "MED123456",
+    "phone": "+1234567890"
+}
+Respuesta (201):
+{
+    "user": {
+        "id": "uuid",
+        "email": "string",
+        "username": "string",
+        "first_name": "string",
+        "last_name": "string",
+        "is_medical_staff": boolean,
+        "hospital": "string",
+        "specialization": "string",
+        "license_number": "string",
+        "phone": "string",
+        "created_at": "datetime"
+    },
+    "refresh": "string",
+    "access": "string"
+}
+
+1.2 Inicio de Sesión
+POST /api/authentication/login/
+Body:
+{
+    "email": "string",
+    "password": "string"
+}
+Respuesta (200):
+{
+    "user": {
+        "id": "uuid",
+        "email": "string",
+        "username": "string",
+        "first_name": "string",
+        "last_name": "string",
+        "is_medical_staff": boolean,
+        "hospital": "string",
+        "specialization": "string",
+        "license_number": "string",
+        "phone": "string",
+        "created_at": "datetime"
+    },
+    "refresh": "string",
+    "access": "string"
+}
+
+1.3 Cerrar Sesión
+POST /api/authentication/logout/
+Headers: Authorization: Bearer <token>
+Respuesta (200):
+{
+    "message": "Sesión cerrada exitosamente"
+}
+
+1.4 Perfil de Usuario
+GET /api/authentication/profile/
+Headers: Authorization: Bearer <token>
+Respuesta (200):
+{
+    "id": "uuid",
+    "email": "string",
+    "username": "string",
+    "first_name": "string",
+    "last_name": "string",
+    "is_medical_staff": boolean,
+    "hospital": "string",
+    "specialization": "string",
+    "license_number": "string",
+    "phone": "string",
+    "created_at": "datetime"
+}
+
+1.5 Refrescar Token
+POST /api/authentication/token/refresh/
+Body:
+{
+    "refresh": "string"
+}
+Respuesta (200):
+{
+    "access": "string"
+}
+
+2. PREDICCIONES (/api/predictions/)
+--------------------------------
+
+2.1 Predicción Individual
+POST /api/predictions/predictions/predict/
+Body:
+{
+    "patient_id": "uuid",
+    "medical_record_id": "uuid"
+}
+Respuesta (200):
+{
+    "riesgo_nivel": "string",
+    "probabilidad": float,
+    "factores_riesgo": [],
+    "recomendaciones": [],
+    "confidence_score": float
+}
+
+2.2 Predicción en Lote
+POST /api/predictions/predictions/batch_predict/
+Body:
+{
+    "data": [
+        {
+            "patient_id": "uuid",
+            "medical_record_id": "uuid"
+        }
+    ]
+}
+Respuesta (200):
+[
+    {
+        "riesgo_nivel": "string",
+        "probabilidad": float,
+        "factores_riesgo": [],
+        "recomendaciones": [],
+        "confidence_score": float
+    }
+]
+
+2.3 Listar Predicciones
+GET /api/predictions/predictions/
+Query params: riesgo_nivel, patient, model_version
+Respuesta (200):
+{
+    "count": int,
+    "next": "url",
+    "previous": "url",
+    "results": [
+        {
+            "id": "uuid",
+            "patient": "uuid",
+            "medical_record": "uuid",
+            "riesgo_nivel": "string",
+            "probabilidad": float,
+            "factores_riesgo": [],
+            "recomendaciones": [],
+            "confidence_score": float,
+            "created_at": "datetime"
+        }
+    ]
+}
+
+2.4 Obtener Predicción Específica
+GET /api/predictions/predictions/{id}/
+Respuesta (200):
+{
+    "id": "uuid",
+    "patient": "uuid",
+    "medical_record": "uuid",
+    "riesgo_nivel": "string",
+    "probabilidad": float,
+    "factores_riesgo": [],
+    "recomendaciones": [],
+    "confidence_score": float,
+    "created_at": "datetime"
+}
+
+2.5 Métricas de Rendimiento
+GET /api/predictions/predictions/performance_metrics/
+Respuesta (200):
+{
+    "model_version": "string",
+    "accuracy": float,
+    "precision": float,
+    "recall": float,
+    "f1_score": float,
+    "roc_auc": float,
+    "total_predictions": int,
+    "correct_predictions": int,
+    "created_at": "datetime"
+}
+
+2.6 Estadísticas
+GET /api/predictions/predictions/statistics/
+Respuesta (200):
+{
+    "total_predictions": int,
+    "risk_distribution": [
+        {
+            "riesgo_nivel": "string",
+            "count": int
+        }
+    ],
+    "average_probability": float,
+    "model_performance": {
+        "accuracy": float,
+        "precision": float,
+        "recall": float,
+        "f1_score": float
+    }
+}
+
+2.7 Limpiar Caché
+POST /api/predictions/predictions/clear_cache/
+Respuesta (200):
+{
+    "message": "Caché limpiado exitosamente"
+}
+
+3. PACIENTES (/api/patients/)
+---------------------------
+
+3.1 Listar Pacientes
+GET /api/patients/
+Query params: search, ordering
+Respuesta (200):
+{
+    "count": int,
+    "next": "url",
+    "previous": "url",
+    "results": [
+        {
+            "id": "uuid",
+            "first_name": "string",
+            "last_name": "string",
+            "date_of_birth": "YYYY-MM-DD",
+            "gender": "M/F",
+            "email": "string",
+            "phone": "string",
+            "address": "string",
+            "medical_history": "string",
+            "created_at": "datetime"
+        }
+    ]
+}
+
+3.2 Obtener Paciente Específico
+GET /api/patients/{id}/
+Respuesta (200):
+{
+    "id": "uuid",
+    "first_name": "string",
+    "last_name": "string",
+    "date_of_birth": "YYYY-MM-DD",
+    "gender": "M/F",
+    "email": "string",
+    "phone": "string",
+    "address": "string",
+    "medical_history": "string",
+    "created_at": "datetime"
+}
+
+3.3 Crear Paciente
+POST /api/patients/
+Body:
+{
+    "first_name": "string",
+    "last_name": "string",
+    "date_of_birth": "YYYY-MM-DD",
+    "gender": "M/F",
+    "email": "string",
+    "phone": "string",
+    "address": "string",
+    "medical_history": "string"
+}
+Respuesta (201):
+{
+    "id": "uuid",
+    "first_name": "string",
+    "last_name": "string",
+    "date_of_birth": "YYYY-MM-DD",
+    "gender": "M/F",
+    "email": "string",
+    "phone": "string",
+    "address": "string",
+    "medical_history": "string",
+    "created_at": "datetime"
+}
+
+3.4 Actualizar Paciente
+PUT /api/patients/{id}/
+PATCH /api/patients/{id}/
+Body: Campos a actualizar
+Respuesta (200): Paciente actualizado
+
+3.5 Eliminar Paciente
+DELETE /api/patients/{id}/
+Respuesta (204): No Content
+
+3.6 Registros Médicos del Paciente
+GET /api/patients/medical-records/
+Respuesta (200):
+{
+    "count": int,
+    "next": "url",
+    "previous": "url",
+    "results": [
+        {
+            "id": "uuid",
+            "patient": "uuid",
+            "fecha": "YYYY-MM-DD",
+            "diagnostico": "string",
+            "tratamiento": "string",
+            "observaciones": "string",
+            "created_at": "datetime"
+        }
+    ]
+}
+
+4. DATOS MÉDICOS (/api/medical-records/)
+-------------------------------------
+
+4.1 Listar Datos Médicos
+GET /api/medical-records/medical-data/
+Query params: patient, date_range
+Respuesta (200):
+{
+    "count": int,
+    "next": "url",
+    "previous": "url",
+    "results": [
+        {
+            "id": "uuid",
+            "patient": "uuid",
+            "fecha": "YYYY-MM-DD",
+            "diagnostico": "string",
+            "tratamiento": "string",
+            "observaciones": "string",
+            "created_at": "datetime"
+        }
+    ]
+}
+
+4.2 Importar Datos
+POST /api/medical-records/medical-data/import/
+Body: FormData
+- file: CSV file
+- patient_id: uuid (opcional)
+Respuesta (201):
+{
+    "message": "Datos importados exitosamente",
+    "records_imported": int
+}
+
+4.3 Obtener Datos Específicos
+GET /api/medical-records/medical-data/{id}/
+Respuesta (200):
+{
+    "id": "uuid",
+    "patient": "uuid",
+    "fecha": "YYYY-MM-DD",
+    "diagnostico": "string",
+    "tratamiento": "string",
+    "observaciones": "string",
+    "created_at": "datetime"
+}
+
+4.4 Actualizar Datos
+PUT /api/medical-records/medical-data/{id}/
+PATCH /api/medical-records/medical-data/{id}/
+Body: Campos a actualizar
+Respuesta (200): Datos actualizados
+
+4.5 Eliminar Datos
+DELETE /api/medical-records/medical-data/{id}/
+Respuesta (204): No Content
+
+5. ANALYTICS (/api/analytics/)
+----------------------------
+
+5.1 Análisis General
+GET /api/analytics/
+Respuesta (200):
+{
+    "total_patients": int,
+    "total_predictions": int,
+    "risk_distribution": {
+        "alto": int,
+        "medio": int,
+        "bajo": int
+    },
+    "monthly_evolution": [
+        {
+            "mes": "string",
+            "predicciones": int,
+            "precision": float
+        }
+    ]
+}
+
+5.2 Estadísticas Específicas
+GET /api/analytics/statistics/
+Query params: date_range, risk_level
+Respuesta (200):
+{
+    "date_range": {
+        "start": "YYYY-MM-DD",
+        "end": "YYYY-MM-DD"
+    },
+    "risk_level": "string",
+    "total_predictions": int,
+    "accuracy": float,
+    "distribution": {
+        "alto": int,
+        "medio": int,
+        "bajo": int
+    }
+}
+
+6. INTEGRACIÓN (/api/integration/)
+-------------------------------
+
+6.1 Predicción desde Sistema Externo
+POST /api/integration/predict_from_external/
+Body:
+{
+    "external_patient_id": "string",
+    "integration_name": "string",
+    "auto_import": boolean
+}
+Respuesta (201):
+{
+    "message": "string",
+    "patient_id": "uuid",
+    "prediction_id": "uuid",
+    "prediction": {
+        "riesgo_nivel": "string",
+        "probabilidad": float,
+        "factores_riesgo": [],
+        "recomendaciones": [],
+        "confidence_score": float
+    }
+}
+
+NOTAS GENERALES
+==============
+
+1. Autenticación
+- Todos los endpoints (excepto login y registro) requieren token JWT
+- Header: Authorization: Bearer <token>
+
+2. Paginación
+- Los endpoints de listado soportan paginación
+- Query params: page, page_size
+
+3. Filtrado
+- La mayoría de endpoints soportan filtrado
+- Query params específicos por endpoint
+
+4. Ordenamiento
+- Soportado en endpoints de listado
+- Query param: ordering
+
+5. Formatos de Respuesta
+- Éxito: 200 OK, 201 Created
+- Error: 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 500 Internal Server Error
+
+6. Archivos
+- Para subida de archivos (CSV): usar multipart/form-data
+- Tamaño máximo: 10MB
+
+7. Caché
+- Algunos endpoints usan caché para mejorar rendimiento
+- Se puede limpiar con el endpoint específico 
