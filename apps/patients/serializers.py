@@ -8,8 +8,40 @@ class MedicalRecordSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MedicalRecord
-        fields = '__all__'
-        read_only_fields = ['id', 'created_at']
+        fields = [
+            'id', 'patient', 'presion_sistolica', 'presion_diastolica', 'frecuencia_cardiaca',
+            'colesterol', 'colesterol_hdl', 'colesterol_ldl', 'trigliceridos', 'glucosa',
+            'hemoglobina_glicosilada', 'cigarrillos_dia', 'anos_tabaquismo', 'actividad_fisica',
+            'antecedentes_cardiacos', 'diabetes', 'hipertension', 'medicamentos_actuales',
+            'alergias', 'observaciones', 'external_record_id', 'external_data',
+            'fecha_registro', 'created_at', 'presion_arterial', 'indice_paquetes_ano',
+            'riesgo_diabetes'
+        ]
+        read_only_fields = [
+            'id', 'created_at', 'fecha_registro', 'presion_arterial',
+            'indice_paquetes_ano', 'riesgo_diabetes'
+        ]
+
+    def create(self, validated_data):
+        print("Datos validados para crear:", validated_data)
+        # Asegurarse de que los campos JSON tengan valores por defecto
+        if 'medicamentos_actuales' not in validated_data:
+            validated_data['medicamentos_actuales'] = []
+        if 'alergias' not in validated_data:
+            validated_data['alergias'] = []
+        if 'external_data' not in validated_data:
+            validated_data['external_data'] = {}
+        
+        # Convertir campos booleanos
+        for field in ['diabetes', 'hipertension']:
+            if field in validated_data:
+                validated_data[field] = bool(validated_data[field])
+        
+        return super().create(validated_data)
+
+    def validate(self, attrs):
+        print("Datos recibidos en validación:", attrs)
+        return attrs
 
 class PatientSerializer(serializers.ModelSerializer):
     nombre_completo = serializers.ReadOnlyField()
@@ -54,6 +86,12 @@ class PatientCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Patient
         fields = [
-            'nombre', 'apellidos', 'fecha_nacimiento', 'sexo', 'peso', 
-            'altura', 'email', 'telefono', 'direccion', 'hospital'
+            'id', 'nombre', 'apellidos', 'edad', 'sexo', 'peso', 
+            'altura', 'email', 'telefono', 'direccion', 'hospital',
+            'numero_historia'
         ]
+        read_only_fields = ['id']
+
+    def create(self, validated_data):
+        print("Datos validados en PatientCreateSerializer.create:", validated_data)
+        return super().create(validated_data)

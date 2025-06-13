@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Count, Avg, Q
+from django.db.models import Count, Avg, Q, Case, When, CharField, Value
 from django.utils import timezone
 from datetime import timedelta
 from apps.patients.models import Patient, MedicalRecord
@@ -49,15 +49,12 @@ class AnalyticsViewSet(viewsets.ViewSet):
     
     def _get_age_risk_distribution(self):
         """Distribución de riesgo por grupos de edad"""
-        from django.db.models import Case, When, CharField
-        
         predictions_with_age = Prediction.objects.select_related('patient').annotate(
             age_group=Case(
-                When(patient__edad__lt=31, then='18-30'),
-                When(patient__edad__lt=46, then='31-45'),
-                When(patient__edad__lt=61, then='46-60'),
-                default='60+',
-                output_field=CharField()
+                When(patient__edad__lt=31, then=Value('18-30')),
+                When(patient__edad__lt=46, then=Value('31-45')),
+                When(patient__edad__lt=61, then=Value('46-60')),
+                default=Value('60+')
             )
         )
         
@@ -130,10 +127,10 @@ class AnalyticsViewSet(viewsets.ViewSet):
         ).values('month').annotate(
             predicciones=Count('id'),
             precision=Avg('confidence_score')
-        ).order_by('month')
+        ).order_by('-month')[:6] # Obtener los últimos 6 meses en orden descendente
         
         result = []
-        for data in monthly_data[-6:]:  # Últimos 6 meses
+        for data in list(monthly_data)[::-1]:  # Invertir para obtener orden ascendente
             result.append({
                 'mes': data['month'].strftime('%b'),
                 'predicciones': data['predicciones'],

@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status, filters
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Patient, MedicalRecord
 from .serializers import (
@@ -10,6 +11,7 @@ from .serializers import (
 
 class PatientViewSet(viewsets.ModelViewSet):
     queryset = Patient.objects.filter(is_active=True)
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['sexo', 'hospital', 'medico_tratante']
     search_fields = ['nombre', 'apellidos', 'numero_historia', 'email']
@@ -26,18 +28,45 @@ class PatientViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(medico_tratante=self.request.user)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def add_medical_record(self, request, pk=None):
-        patient = self.get_object()
-        serializer = MedicalRecordSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            serializer.save(
-                patient=patient,
-                medico_registro=request.user
-            )
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            patient = self.get_object()
+            data = request.data.copy()
+            
+            # Convertir valores booleanos
+            for field in ['antecedentes_cardiacos', 'diabetes', 'hipertension']:
+                if field in data:
+                    data[field] = data[field].lower() == 'true'
+            
+            # Convertir valores numéricos
+            numeric_fields = [
+                'presion_sistolica', 'presion_diastolica', 'frecuencia_cardiaca',
+                'colesterol', 'colesterol_hdl', 'colesterol_ldl', 'trigliceridos',
+                'glucosa', 'hemoglobina_glicosilada', 'cigarrillos_dia', 'anos_tabaquismo'
+            ]
+            for field in numeric_fields:
+                if field in data and data[field]:
+                    try:
+                        data[field] = float(data[field])
+                    except (ValueError, TypeError):
+                        data[field] = None
+            
+            # Agregar el paciente al contexto
+            data['patient'] = patient.id
+            
+            serializer = MedicalRecordSerializer(data=data)
+            if serializer.is_valid():
+                print("Datos validados:", serializer.validated_data)
+                medical_record = serializer.save()
+                return Response(MedicalRecordSerializer(medical_record).data, status=status.HTTP_201_CREATED)
+            print("Errores de validación:", serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Patient.DoesNotExist:
+            return Response({'error': 'Paciente no encontrado'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print("Error al crear registro médico:", str(e))
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'])
     def medical_history(self, request, pk=None):

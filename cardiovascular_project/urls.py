@@ -13,12 +13,14 @@ def health_check(request):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    
     path('health/', health_check, name='health_check'),
     path('api/patients/', include('apps.patients.urls')),
     path('api/predictions/', include('apps.predictions.urls')),
     path('api/medical-data/', include('apps.medical_data.urls')),
     path('api/analytics/', include('apps.analytics.urls')),
     path('api/integration/', include('apps.integration.urls')),
+    path('api/auth/', include('apps.authentication.urls')),
 ]
 
 if settings.DEBUG:

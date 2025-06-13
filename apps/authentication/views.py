@@ -26,17 +26,34 @@ class RegisterView(generics.CreateAPIView):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_view(request):
+    print("Headers recibidos:", request.headers)
+    print("Datos recibidos:", request.data)
+    
     serializer = LoginSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
+    if not serializer.is_valid():
+        print("Errores de validación:", serializer.errors)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     user = serializer.validated_data['user']
     refresh = RefreshToken.for_user(user)
     
-    return Response({
-        'user': UserSerializer(user).data,
+    # Serializar el usuario para depuración
+    user_data = UserSerializer(user).data
+    print(f"DEBUG: User data being sent from login_view: {user_data}")
+
+    response = Response({
+        'user': user_data,
         'refresh': str(refresh),
         'access': str(refresh.access_token),
     })
+    
+    # Configurar headers de CORS
+    response["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    response["Access-Control-Allow-Credentials"] = "true"
+    response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    
+    return response
 
 @api_view(['POST'])
 def logout_view(request):
@@ -46,6 +63,7 @@ def logout_view(request):
         token.blacklist()
         return Response({'message': 'Logout exitoso'}, status=status.HTTP_200_OK)
     except Exception as e:
+        print(f"ERROR en logout_view: {e}")
         return Response({'error': 'Token inválido'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])

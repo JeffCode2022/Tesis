@@ -1,6 +1,7 @@
 from django.db import models
 import uuid
 from django.utils import timezone
+from django.conf import settings
 
 class Patient(models.Model):
     GENDER_CHOICES = [
@@ -26,6 +27,7 @@ class Patient(models.Model):
     # Información médica
     numero_historia = models.CharField(max_length=50, unique=True)
     hospital = models.CharField(max_length=200, default="Policlínico Laura Caller")
+    medico_tratante = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='patients_treated')
     
     # Integración con sistema externo
     external_patient_id = models.CharField(max_length=100, blank=True, null=True, 

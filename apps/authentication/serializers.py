@@ -29,14 +29,16 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return user
 
 class UserSerializer(serializers.ModelSerializer):
+    updated_at = serializers.DateTimeField(read_only=True)
+
     class Meta:
         model = User
         fields = [
             'id', 'email', 'username', 'first_name', 'last_name',
             'is_medical_staff', 'hospital', 'specialization', 
-            'license_number', 'phone', 'created_at'
+            'license_number', 'phone', 'created_at', 'is_active', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'created_at', 'is_active', 'updated_at']
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -47,7 +49,7 @@ class LoginSerializer(serializers.Serializer):
         password = attrs.get('password')
 
         if email and password:
-            user = authenticate(username=email, password=password)
+            user = authenticate(email=email, password=password)
             if not user:
                 raise serializers.ValidationError('Credenciales inválidas')
             if not user.is_active:
