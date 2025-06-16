@@ -5,6 +5,17 @@ import dynamic from "next/dynamic"
 import { useAuth } from "@/hooks/useAuth"
 import { useRouter } from "next/navigation"
 import { v4 as uuidv4 } from 'uuid'
+import { 
+  LayoutDashboard, 
+  Users, 
+  FileText, 
+  BarChart3, 
+  Settings, 
+  LogOut,
+  Heart,
+  Activity,
+  Database
+} from "lucide-react"
 
 // Import components
 const Header = dynamic(() => import("@/components/header").then((mod) => mod.Header), { ssr: false })
@@ -14,6 +25,7 @@ import { RealTimeAnalysis } from "@/components/real-time-analysis"
 import { PredictionResults } from "@/components/prediction-results"
 import { MedicalDataImport } from "@/components/medical-data-import"
 import { PatientsList } from "@/components/patients-list"
+import { Sidebar } from "@/components/sidebar"
 
 // Import services
 import { predictionService, type PredictionResult, type PredictionData } from "@/lib/services/predictions"
@@ -37,6 +49,8 @@ const adaptMetrics = (metrics: DashboardMetrics) => ({
 export default function Dashboard() {
   const { isAuthenticated, user, isLoading } = useAuth()
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
+  const [activeSection, setActiveSection] = useState('dashboard')
 
   // Estados
   const [metrics, setMetrics] = useState<DashboardMetrics>({
@@ -62,8 +76,10 @@ export default function Dashboard() {
 
   const [formData, setFormData] = useState({
     nombre: "",
+    apellidos: "",
+    dni: "",
     edad: "",
-    sexo: "",
+    sexo: "M",
     peso: "",
     altura: "",
     presionSistolica: "",
@@ -72,9 +88,8 @@ export default function Dashboard() {
     glucosa: "",
     cigarrillosDia: "",
     anosTabaquismo: "",
-    actividadFisica: "",
-    antecedentesCardiacos: "",
-    apellidos: "",
+    actividadFisica: "sedentario",
+    antecedentesCardiacos: "no",
     numero_historia: "",
   })
 
@@ -108,10 +123,14 @@ export default function Dashboard() {
   }, [isAuthenticated])
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push("/login")
+    setMounted(true)
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('auth_token')
+      if (!token) {
+        window.location.href = '/login'
+      }
     }
-  }, [isLoading, isAuthenticated, router])
+  }, [])
 
   // Manejadores de eventos
   const handleFormChange = (field: string, value: string) => {
@@ -120,9 +139,10 @@ export default function Dashboard() {
 
   const handlePredict = async () => {
     try {
-      console.log('Value of formData.nombre before prediction:', formData.nombre)
       const predictionData: PredictionData = {
-        ...formData,
+        nombre: formData.nombre,
+        apellidos: formData.apellidos,
+        dni: formData.dni,
         edad: Number(formData.edad),
         sexo: formData.sexo,
         peso: Number(formData.peso),
@@ -135,7 +155,6 @@ export default function Dashboard() {
         anosTabaquismo: Number(formData.anosTabaquismo),
         actividadFisica: formData.actividadFisica,
         antecedentesCardiacos: formData.antecedentesCardiacos,
-        apellidos: formData.apellidos,
         numero_historia: formData.numero_historia,
       }
       const result = await predictionService.predict(predictionData)
@@ -169,24 +188,148 @@ export default function Dashboard() {
       const lines = content.split("\n").filter(line => line.trim())
       const processedData: Patient[] = lines.map((line, index) => {
         const values = line.split(",")
+        // Asumiendo el orden de los valores: nombre_completo, dni, edad, sexo, peso, altura, riesgo_actual, numero_historia, ultimo_registro
+        const nombreCompleto = values[0] || `Paciente ${index + 1}`
+        const [nombre, ...apellidosArray] = nombreCompleto.split(" ")
+        const apellidos = apellidosArray.join(" ")
+
+        const dni = values[1] || `${Math.floor(Math.random() * 100000000).toString().padStart(8, '0')}` // Generar DNI aleatorio si no está presente
+        const edad = Number(values[2]) || Math.floor(Math.random() * 50) + 30
+        const sexo = values[3] || (Math.random() > 0.5 ? "M" : "F")
+        const peso = Number(values[4]) || Math.floor(Math.random() * 50) + 50
+        const altura = Number(values[5]) || Math.floor(Math.random() * 50) + 150
+        const riesgoActual = values[6] || "Desconocido"
+        const numeroHistoria = values[7] || `HC-${index + 1}`
+        const ultimoRegistro = values[8] || new Date().toISOString()
+
+        const imcCalculado = peso > 0 && altura > 0 ? (peso / ((altura / 100) * (altura / 100))).toFixed(2) : "N/A"
+
         return {
           id: uuidv4(),
-          nombre: values[0] || `Paciente ${index + 1}`,
-          edad: Number(values[1]) || Math.floor(Math.random() * 50) + 30,
-          sexo: values[4] || (Math.random() > 0.5 ? "Masculino" : "Femenino"),
-          peso: Number(values[5]) || Math.floor(Math.random() * 50) + 50,
-          altura: Number(values[6]) || Math.floor(Math.random() * 50) + 150,
-          riesgo: "Desconocido",
-          apellidos: values[7] || "",
-          numero_historia: values[8] || `HC-${index + 1}`,
+          nombre: nombre,
+          apellidos: apellidos,
+          dni: dni, // Añadido campo DNI
+          edad: edad,
+          sexo: sexo,
+          peso: peso,
+          altura: altura,
+          imc: parseFloat(imcCalculado) || undefined,
+          riesgo_actual: riesgoActual,
+          numero_historia: numeroHistoria,
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: ultimoRegistro,
+          ultimo_registro: ultimoRegistro,
         }
       })
       setImportedPatients(processedData)
     } catch (error) {
       console.error('Error processing text data:', error)
     }
+  }
+
+  const menuItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'patients', label: 'Pacientes', icon: Users },
+    { id: 'predictions', label: 'Predicciones', icon: Activity },
+    { id: 'import', label: 'Importar Datos', icon: Database },
+    { id: 'reports', label: 'Reportes', icon: FileText },
+    { id: 'analytics', label: 'Analíticas', icon: BarChart3 },
+    { id: 'settings', label: 'Configuración', icon: Settings },
+  ]
+
+  const renderContent = () => {
+    switch (activeSection) {
+      case 'dashboard':
+        return (
+          <div className="space-y-6">
+            <MetricsCards data={adaptMetrics(metrics)} onMetricClick={setActiveSection} />
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Model Accuracy and Risk Distribution */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold mb-4">Precisión del Modelo y Distribución de Riesgo</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+                    <span className="text-gray-600">Precisión Actual del Modelo</span>
+                    <span className="text-2xl font-bold text-blue-600">{metrics.model_accuracy.toFixed(2)}%</span>
+                  </div>
+                  <div className="h-[300px]">
+                    <RealTimeAnalysis data={metrics.risk_distribution} type="risk" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Age Risk Distribution */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold mb-4">Distribución de Riesgo por Edad</h3>
+                <div className="h-[300px]">
+                  <RealTimeAnalysis data={metrics.age_risk_distribution} type="age" />
+                </div>
+              </div>
+
+              {/* Monthly Evolution */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold mb-4">Evolución Mensual</h3>
+                <div className="h-[300px]">
+                  <RealTimeAnalysis data={metrics.monthly_evolution} type="monthly" />
+                </div>
+              </div>
+
+              {/* Common Risk Factors */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold mb-4">Factores de Riesgo Comunes</h3>
+                <div className="h-[300px]">
+                  <RealTimeAnalysis data={metrics.common_risk_factors} type="factors" />
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      case 'patients':
+        return <PatientsList importedPatients={importedPatients} />
+      case 'predictions':
+        return (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold mb-4">Nueva Predicción</h3>
+              <PredictionForm 
+                formData={formData}
+                onFormChange={handleFormChange}
+                onPredict={handlePredict}
+              />
+            </div>
+            {prediction && (
+              <div className="bg-white rounded-lg shadow p-6">
+                <PredictionResults prediction={prediction} />
+              </div>
+            )}
+          </div>
+        )
+      case 'import':
+        return (
+          <MedicalDataImport
+            importedPatients={importedPatients}
+            onFileUpload={handleFileUpload}
+            onDataProcess={processTextData}
+          />
+        )
+      case 'reports':
+        return <div className="p-4">Reportes en desarrollo...</div>
+      case 'analytics':
+        return <div className="p-4">Analíticas en desarrollo...</div>
+      case 'settings':
+        return <div className="p-4">Configuración en desarrollo...</div>
+      default:
+        return null
+    }
+  }
+
+  if (!mounted) {
+    return null
+  }
+
+  if (typeof window !== 'undefined' && !localStorage.getItem('auth_token')) {
+    return <div>Cargando...</div>;
   }
 
   if (isLoading) {
@@ -202,33 +345,23 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Header 
         modelAccuracy={95.8}
         userName={`${user?.first_name} ${user?.last_name}`}
         userRole="Médico"
       />
-      <main className="container mx-auto p-4">
-        <MetricsCards data={adaptMetrics(metrics)} />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-          <PredictionForm 
-            formData={formData}
-            onFormChange={handleFormChange}
-            onPredict={handlePredict}
-          />
-          <RealTimeAnalysis formData={formData} />
-        </div>
-        {prediction && <PredictionResults prediction={prediction} />}
-        <MedicalDataImport
-          importedPatients={importedPatients}
-          onFileUpload={handleFileUpload}
-          onDataProcess={processTextData}
-        />
-        <PatientsList 
-          patients={patients}
-          importedPatients={importedPatients}
-        />
-      </main>
+      <div className="flex">
+        {/* Sidebar */}
+        <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} />
+
+        {/* Main Content */}
+        <main className="flex-1 p-6 overflow-auto">
+          <div className="max-w-7xl mx-auto">
+            {renderContent()}
+          </div>
+        </main>
+      </div>
     </div>
   )
 } 

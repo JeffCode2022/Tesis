@@ -1,6 +1,21 @@
-import { Scale } from "lucide-react"
+import { Scale, TrendingUp, Users, AlertTriangle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line
+} from 'recharts'
 
 interface FormData {
   peso: string
@@ -11,11 +26,60 @@ interface FormData {
   anosTabaquismo: string
 }
 
-interface RealTimeAnalysisProps {
-  formData: FormData
+interface RiskDistribution {
+  riesgo_nivel: string
+  count: number
 }
 
-export function RealTimeAnalysis({ formData }: RealTimeAnalysisProps) {
+interface AgeDistribution {
+  rango: string
+  bajo: number
+  medio: number
+  alto: number
+}
+
+interface MonthlyEvolution {
+  mes: string
+  predicciones: number
+  precision: number
+}
+
+interface RiskFactor {
+  factor: string
+  pacientes: number
+  porcentaje: number
+}
+
+interface RealTimeAnalysisProps {
+  formData?: FormData
+  data?: RiskDistribution[] | AgeDistribution[] | MonthlyEvolution[] | RiskFactor[]
+  type?: 'risk' | 'age' | 'monthly' | 'factors'
+}
+
+const COLORS = ['#4CAF50', '#FFC107', '#F44336']
+
+export function RealTimeAnalysis({ formData, data, type = 'risk' }: RealTimeAnalysisProps) {
+  if (formData) {
+    return <FormAnalysis formData={formData} />
+  }
+
+  if (!data) return null
+
+  switch (type) {
+    case 'risk':
+      return <RiskDistributionChart data={data as RiskDistribution[]} />
+    case 'age':
+      return <AgeDistributionChart data={data as AgeDistribution[]} />
+    case 'monthly':
+      return <MonthlyEvolutionChart data={data as MonthlyEvolution[]} />
+    case 'factors':
+      return <RiskFactorsChart data={data as RiskFactor[]} />
+    default:
+      return null
+  }
+}
+
+function FormAnalysis({ formData }: { formData: FormData }) {
   const calcularIMC = () => {
     if (formData.peso && formData.altura) {
       const peso = Number.parseFloat(formData.peso)
@@ -196,5 +260,101 @@ export function RealTimeAnalysis({ formData }: RealTimeAnalysisProps) {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function RiskDistributionChart({ data }: { data: RiskDistribution[] }) {
+  return (
+    <div className="h-[300px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="count"
+            nameKey="riesgo_nivel"
+            cx="50%"
+            cy="50%"
+            outerRadius={80}
+            label
+          >
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function AgeDistributionChart({ data }: { data: AgeDistribution[] }) {
+  return (
+    <div className="h-[300px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="rango" />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey="bajo" name="Riesgo Bajo" fill="#4CAF50" />
+          <Bar dataKey="medio" name="Riesgo Medio" fill="#FFC107" />
+          <Bar dataKey="alto" name="Riesgo Alto" fill="#F44336" />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function MonthlyEvolutionChart({ data }: { data: MonthlyEvolution[] }) {
+  return (
+    <div className="h-[300px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="mes" />
+          <YAxis yAxisId="left" />
+          <YAxis yAxisId="right" orientation="right" />
+          <Tooltip />
+          <Legend />
+          <Line
+            yAxisId="left"
+            type="monotone"
+            dataKey="predicciones"
+            name="Predicciones"
+            stroke="#4CAF50"
+            activeDot={{ r: 8 }}
+          />
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="precision"
+            name="Precisión (%)"
+            stroke="#2196F3"
+            activeDot={{ r: 8 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function RiskFactorsChart({ data }: { data: RiskFactor[] }) {
+  return (
+    <div className="h-[300px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="factor" />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey="pacientes" name="Pacientes" fill="#4CAF50" />
+          <Bar dataKey="porcentaje" name="Porcentaje" fill="#2196F3" />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   )
 }

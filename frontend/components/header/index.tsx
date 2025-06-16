@@ -39,61 +39,26 @@ export function Header({
   }
 
   return (
-    <div className="bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white shadow-2xl sticky top-0 z-50">
-      <div className="container mx-auto p-4">
+    <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div className="px-6 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm hover:bg-white/20 transition-all duration-300">
-              <Heart className="h-8 w-8 text-red-400" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-blue-200 bg-clip-text text-transparent">
-                CardioPredict AI
-              </h1>
-              <p className="text-blue-200 text-sm">Policlínico Laura Caller - Sistema Predictivo Avanzado</p>
+            <div className="text-sm text-gray-600 dark:text-gray-300">
+              Precisión del modelo: <span className="font-semibold text-green-600 dark:text-green-400">{modelAccuracy}%</span>
             </div>
           </div>
           
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
             <div className="text-right">
-              <div className="text-sm text-blue-200">Precisión del Modelo</div>
-              <div className="text-2xl font-bold text-green-400">{modelAccuracy}%</div>
+              <div className="text-sm font-medium text-gray-900 dark:text-white">{displayName}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">{userRole}</div>
             </div>
-            
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
-                <Bell className="h-5 w-5" />
-                {notifications > 0 && (
-                  <Badge className="absolute -top-1 -right-1 bg-red-500 text-white">
-                    {notifications}
-                  </Badge>
-                )}
-              </Button>
-              
-              <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
-                <Settings className="h-5 w-5" />
-              </Button>
-
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="text-white hover:bg-white/10"
-                onClick={handleLogout}
-              >
-                <LogOut className="h-5 w-5" />
-              </Button>
-              
-              <div className="flex items-center gap-2">
-                <Avatar className="h-8 w-8 border-2 border-white/20">
-                  <AvatarImage src="/placeholder.svg" alt={displayName} />
-                  <AvatarFallback>{initials}</AvatarFallback>
-                </Avatar>
-                <div className="text-right">
-                  <div className="text-sm font-medium">{displayName}</div>
-                  <div className="text-xs text-blue-200">{userRole}</div>
-                </div>
-              </div>
-            </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
           </div>
         </div>
       </div>

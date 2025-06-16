@@ -1,5 +1,6 @@
-import api from "@/lib/api"
+import { api } from "@/lib/api"
 import axios from "axios"
+import Cookies from "js-cookie";
 
 export interface LoginData {
   email: string
@@ -188,6 +189,9 @@ export const authService = {
       storage.setItem("refresh_token", response.data.refresh)
       storage.setItem("auth_user", JSON.stringify(response.data.user))
       storage.setItem("rememberMe", String(data.rememberMe))
+
+      // Guardar el token en cookies para el middleware
+      Cookies.set('auth_token', response.data.access, { expires: data.rememberMe ? 7 : undefined })
 
       // Verificar que los tokens se guardaron correctamente
       const savedToken = storage.getItem("auth_token")

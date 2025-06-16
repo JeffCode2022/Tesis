@@ -1,17 +1,27 @@
 import { api } from './api';
+import { predictionService } from './predictions';
 
 export interface Patient {
   id: string;
   nombre: string;
   apellidos: string;
+  dni: string;
   edad: number;
   sexo: string;
   peso: number;
   altura: number;
-  riesgo: string;
+  imc?: number;
+  riesgo_actual: string | null;
   numero_historia: string;
+  ultimo_registro: string;
   created_at: string;
   updated_at: string;
+  probabilidad?: number;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+  antecedentes_cardiacos?: string;
+  medicamentos_actuales?: string;
 }
 
 export interface MedicalRecord {
@@ -19,12 +29,23 @@ export interface MedicalRecord {
   patient_id: string;
   presion_sistolica: number;
   presion_diastolica: number;
+  frecuencia_cardiaca?: number;
   colesterol: number;
+  colesterol_hdl?: number;
+  colesterol_ldl?: number;
+  trigliceridos?: number;
   glucosa: number;
+  hemoglobina_glicosilada?: number;
   cigarrillos_dia: number;
   anos_tabaquismo: number;
   actividad_fisica: string;
   antecedentes_cardiacos: string;
+  diabetes?: boolean;
+  hipertension?: boolean;
+  medicamentos_actuales?: string;
+  alergias?: string;
+  observaciones?: string;
+  fecha_registro: string;
   created_at: string;
   updated_at: string;
 }
@@ -40,73 +61,100 @@ export const patientService = {
   async getPatients(): Promise<Patient[]> {
     try {
       const response = await api.get<PaginatedPatientsResponse>('/api/patients/');
-      if (Array.isArray(response.data.results)) {
-        return response.data.results;
-      } else {
-        console.warn('API returned non-array data for patients. Returning empty array.', response.data);
-        return [];
-      }
+      return response.data.results || [];
     } catch (error) {
       console.error('Error obteniendo pacientes:', error);
-      throw new Error('Error al obtener la lista de pacientes.');
+      throw error instanceof Error ? error : new Error('Error al obtener la lista de pacientes');
     }
   },
 
   async getPatient(id: string): Promise<Patient> {
     try {
-    const response = await api.get<Patient>(`/api/patients/${id}/`);
-    return response.data;
+      const response = await api.get<Patient>(`/api/patients/${id}/`);
+      const patientData = response.data;
+      
+      // Obtener la última predicción para este paciente
+      const latestPredictionPromise = predictionService.getLatestPredictionForPatient(id);
+
+      // Obtener el último registro médico para este paciente
+      const latestMedicalRecordPromise = this.getLatestMedicalRecordForPatient(id);
+
+      const [latestPrediction, latestMedicalRecord] = await Promise.all([
+        latestPredictionPromise,
+        latestMedicalRecordPromise
+      ]);
+
+      // Combinar los datos del paciente con la probabilidad y el riesgo de la predicción, y los datos del registro médico
+      return {
+        ...patientData,
+        probabilidad: latestPrediction?.probabilidad || undefined,
+        riesgo_actual: latestPrediction?.riesgo || patientData.riesgo_actual,
+        ultimo_registro: latestPrediction?.updated_at || latestMedicalRecord?.fecha_registro || patientData.ultimo_registro,
+        antecedentes_cardiacos: latestMedicalRecord?.antecedentes_cardiacos || patientData.antecedentes_cardiacos,
+        medicamentos_actuales: latestMedicalRecord?.medicamentos_actuales || patientData.medicamentos_actuales,
+      };
     } catch (error) {
       console.error('Error obteniendo paciente:', error);
-      throw new Error('Error al obtener el paciente solicitado.');
+      throw error instanceof Error ? error : new Error('Error al obtener el paciente solicitado');
+    }
+  },
+
+  async getLatestMedicalRecordForPatient(patientId: string): Promise<MedicalRecord | null> {
+    try {
+      const response = await api.get<MedicalRecord[]>(`/api/patients/${patientId}/medical_history/?limit=1&order_by=-fecha_registro`);
+      return response.data.length > 0 ? response.data[0] : null;
+    } catch (error) {
+      console.error(`Error obteniendo el último registro médico para el paciente ${patientId}:`, error);
+      return null;
     }
   },
 
   async createPatient(data: Omit<Patient, 'id' | 'created_at' | 'updated_at' | 'riesgo'>): Promise<Patient> {
     try {
-    const response = await api.post<Patient>('/api/patients/', data);
-    return response.data;
+      console.log('Datos enviados a createPatient:', data);
+      const response = await api.post<Patient>('/api/patients/', data);
+      return response.data;
     } catch (error) {
       console.error('Error creando paciente:', error);
-      throw new Error('Error al crear el paciente.');
+      throw error instanceof Error ? error : new Error('Error al crear el paciente');
     }
   },
 
   async updatePatient(id: string, data: Partial<Omit<Patient, 'id' | 'created_at' | 'updated_at' | 'riesgo'>>): Promise<Patient> {
     try {
-    const response = await api.patch<Patient>(`/api/patients/${id}/`, data);
-    return response.data;
+      const response = await api.patch<Patient>(`/api/patients/${id}/`, data);
+      return response.data;
     } catch (error) {
       console.error('Error actualizando paciente:', error);
-      throw new Error('Error al actualizar el paciente.');
+      throw error instanceof Error ? error : new Error('Error al actualizar el paciente');
     }
   },
 
   async deletePatient(id: string): Promise<void> {
     try {
-    await api.delete(`/api/patients/${id}/`);
+      await api.delete(`/api/patients/${id}/`);
     } catch (error) {
       console.error('Error eliminando paciente:', error);
-      throw new Error('Error al eliminar el paciente.');
+      throw error instanceof Error ? error : new Error('Error al eliminar el paciente');
     }
   },
 
   async createOrUpdate(data: Omit<Patient, 'id' | 'created_at' | 'updated_at' | 'riesgo'>): Promise<Patient> {
     try {
-      // Buscar paciente por nombre
       const patients = await this.getPatients();
-      const existingPatient = patients.find(p => (p.nombre || '').toLowerCase() === data.nombre.toLowerCase());
+      const existingPatient = patients.find(p => 
+        p.dni && data.dni &&
+        p.dni.toLowerCase() === data.dni.toLowerCase()
+      );
 
       if (existingPatient) {
-        // Actualizar paciente existente
         return await this.updatePatient(existingPatient.id, data);
       } else {
-        // Crear nuevo paciente
         return await this.createPatient(data);
       }
     } catch (error) {
       console.error('Error en createOrUpdate:', error);
-      throw new Error('Error al crear o actualizar el paciente.');
+      throw error instanceof Error ? error : new Error('Error al crear o actualizar el paciente');
     }
   },
 
@@ -116,7 +164,7 @@ export const patientService = {
       return response.data;
     } catch (error) {
       console.error('Error creando registro médico:', error);
-      throw new Error('Error al crear el registro médico.');
+      throw error instanceof Error ? error : new Error('Error al crear el registro médico');
     }
   }
 }; 

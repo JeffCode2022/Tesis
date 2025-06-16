@@ -20,9 +20,10 @@ interface MetricsData {
 interface MetricsCardsProps {
   data: MetricsData
   className?: string
+  onMetricClick?: (sectionId: string) => void
 }
 
-export function MetricsCards({ data, className }: MetricsCardsProps) {
+export function MetricsCards({ data, className, onMetricClick }: MetricsCardsProps) {
   const router = useRouter()
 
   const calculateGrowth = (current: number, previous?: number) => {
@@ -44,7 +45,7 @@ export function MetricsCards({ data, className }: MetricsCardsProps) {
         (data.total_patients > data.previous_month_patients ? "text-green-300" : "text-red-300") : 
         "text-green-300",
       tooltip: "Número total de pacientes registrados en el sistema",
-      onClick: () => router.push("/patients"),
+      onClick: () => onMetricClick?.('patients'),
     },
     {
       title: "Predicciones IA",

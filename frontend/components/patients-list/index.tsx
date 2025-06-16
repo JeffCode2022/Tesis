@@ -1,38 +1,100 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { PatientDetailsModal } from "@/components/patient-details-modal"
-import { Patient } from "@/lib/services/patients"
+import { patientService, Patient } from "@/lib/services/patients"
+import { predictionService, type PredictionResult } from "@/lib/services/predictions"
+import { User } from "lucide-react"
 
 interface PatientsListProps {
-  patients: Patient[]
-  importedPatients: any[]
+  importedPatients?: any[]
+  onError?: (errorMessage: string) => void
 }
 
-export function PatientsList({ patients, importedPatients }: PatientsListProps) {
+export function PatientsList({ importedPatients = [], onError }: PatientsListProps) {
+  const [patients, setPatients] = useState<Patient[]>([])
+  const [loading, setLoading] = useState(true)
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const allPatients = [...patients, ...importedPatients.slice(0, 5)]
+  useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const data = await patientService.getPatients()
+        
+        const patientsWithPredictions = await Promise.all(data.map(async (patient) => {
+          const latestPrediction = await predictionService.getLatestPredictionForPatient(patient.id)
+          return {
+            ...patient,
+            probabilidad: latestPrediction?.probabilidad || undefined,
+            riesgo_actual: latestPrediction?.riesgo || patient.riesgo_actual // Actualiza el riesgo si la predicción tiene uno
+          }
+        }))
+
+        setPatients(patientsWithPredictions)
+        console.log('[PatientsList] Pacientes recibidos de la API con predicciones:', patientsWithPredictions)
+      } catch (error) {
+        setPatients([])
+        onError?.(error instanceof Error ? error.message : 'Error al cargar los pacientes')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchPatients()
+  }, [onError])
+
+  const allPatients = [...patients, ...(importedPatients || []).slice(0, 5)]
 
   const handleViewDetails = (patient: Patient) => {
     setSelectedPatient(patient)
     setIsModalOpen(true)
   }
 
-  const getRiskColor = (riesgo: string) => {
+  const getRiskColor = (riesgo: string | null) => {
     switch (riesgo) {
       case "Alto":
         return "border-red-500 text-red-700 bg-red-50"
       case "Medio":
         return "border-yellow-500 text-yellow-700 bg-yellow-50"
-      default:
+      case "Bajo":
         return "border-green-500 text-green-700 bg-green-50"
+      default:
+        return "border-gray-500 text-gray-700 bg-gray-50"
     }
+  }
+
+  const calculateIMC = (peso: number, altura: number): string => {
+    if (typeof peso !== 'number' || typeof altura !== 'number' || peso <= 0 || altura <= 0) {
+      return "N/A"
+    }
+    const alturaMetros = altura / 100 // Convertir cm a metros
+    const imc = peso / (alturaMetros * alturaMetros)
+    return imc.toFixed(2)
+  }
+
+  const formatDate = (dateString: string): string => {
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) { // Check for "Invalid Date"
+        return "N/A"
+      }
+      return date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })
+    } catch (e) {
+      console.error("Error formatting date:", e)
+      return "N/A"
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-[200px] flex items-center justify-center">
+        <span className="text-lg text-gray-500">Cargando pacientes...</span>
+      </div>
+    )
   }
 
   return (
@@ -56,33 +118,34 @@ export function PatientsList({ patients, importedPatients }: PatientsListProps) 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <Avatar className="h-12 w-12">
-                        <AvatarImage src={`/placeholder.svg?height=48&width=48`} />
                         <AvatarFallback className="bg-blue-100 text-blue-700">
-                          {paciente.nombre
-                            ? paciente.nombre
+                          {paciente.nombre_completo
+                            ? paciente.nombre_completo
                                 .split(" ")
-                                .map((n) => n[0])
+                                .map((n: string) => n[0])
                                 .join("")
-                            : "UN"}
+                            : <User className="h-6 w-6" />}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <div className="font-semibold text-gray-800">{paciente.nombre}</div>
+                        <div className="font-semibold text-gray-800">{paciente.nombre_completo}</div>
                         <div className="text-sm text-gray-600">
-                          {paciente.edad} años • IMC: {paciente.imc || "N/A"} • {paciente.fecha || "Hoy"}
+                          {paciente.edad} años • IMC: {paciente.imc !== undefined && paciente.imc !== null ? paciente.imc : "N/A"} • {formatDate(paciente.ultimo_registro)}
                         </div>
-                        {paciente.presion && <div className="text-xs text-gray-500">Presión: {paciente.presion}</div>}
+                        {/* Campo de presión comentado, ya que no forma parte de la interfaz Patient */}
                       </div>
                     </div>
                     <div className="flex items-center gap-6">
                       <div className="text-center">
                         <div className="text-2xl font-bold text-gray-800">
-                          {paciente.probabilidad || Math.floor(Math.random() * 100)}%
+                          {paciente.probabilidad !== undefined && paciente.probabilidad !== null
+                            ? `${Math.round(paciente.probabilidad)}%`
+                            : "N/A"}
                         </div>
                         <div className="text-xs text-gray-500">Probabilidad</div>
                       </div>
-                      <Badge variant="outline" className={`px-3 py-1 ${getRiskColor(paciente.riesgo || "Desconocido")}`}>
-                        {paciente.riesgo || "Desconocido"}
+                      <Badge variant="outline" className={`px-3 py-1 ${getRiskColor(paciente.riesgo_actual)}`}>
+                        {paciente.riesgo_actual || "Desconocido"}
                       </Badge>
                       <Button
                         variant="outline"

@@ -9,6 +9,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { v4 as uuidv4 } from 'uuid'; // @ts-ignore
 import { useAuth } from "@/hooks/useAuth"
 import { useRouter } from "next/navigation"
+import Cookies from "js-cookie"
 
 // Definición de tipos para los mensajes
 type MessageType = "bot" | "user"
@@ -101,20 +102,33 @@ type FormData = {
   antecedentesCardiacos: string
 }
 
-export default function Home() {
+export default function HomePage() {
   const router = useRouter()
   const { isAuthenticated, isLoading } = useAuth()
+  const [mounted, setMounted] = useState(false)
 
-  // Se elimina el useEffect para evitar conflictos de redirección
-  // useEffect(() => {
-  //   if (!isLoading) {
-  //     if (isAuthenticated) {
-  //       router.push("/dashboard")
-  //     } else {
-  //       router.push("/login")
-  //     }
-  //   }
-  // }, [isLoading, isAuthenticated, router])
+  useEffect(() => {
+    const token = Cookies.get('auth_token');
+    if (!token) {
+      router.replace('/login');
+      setTimeout(() => {
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+      }, 200);
+    } else {
+      router.replace('/dashboard');
+      setTimeout(() => {
+        if (window.location.pathname !== '/dashboard') {
+          window.location.href = '/dashboard';
+        }
+      }, 200);
+    }
+  }, [router]);
+
+  if (!mounted) {
+    return null
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">

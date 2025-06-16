@@ -1,4 +1,7 @@
 import axios from 'axios';
+import { setupRetryInterceptor } from './retry';
+// import { cache } from './cache';
+import { rateLimiter } from './rateLimit';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -46,4 +49,27 @@ api.interceptors.response.use(
   }
 );
 
-export default api; 
+// Configurar retry logic
+setupRetryInterceptor(api, {
+  retries: 3,
+  retryDelay: 1000,
+  retryableStatusCodes: [408, 429, 500, 502, 503, 504]
+});
+
+// Configurar rate limiting
+const rateLimitConfig = {
+  maxRequests: 100,
+  timeWindow: 60 * 1000 // 1 minuto
+};
+
+// Función helper para limpiar caché de un endpoint específico
+// export const clearEndpointCache = (endpoint: string) => {
+//   cache.remove(endpoint);
+// };
+
+// Función helper para limpiar toda la caché
+// export const clearAllCache = () => {
+//   cache.clear();
+// };
+
+export { api }; 

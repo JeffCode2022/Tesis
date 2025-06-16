@@ -13,6 +13,7 @@ import { predictionService } from "@/lib/services/predictions"
 interface FormData {
   nombre: string
   apellidos: string
+  dni: string
   edad: string
   sexo: string
   peso: string
@@ -47,20 +48,27 @@ export function PredictionForm({ formData, onFormChange, onPredict }: Prediction
     setLoading(true)
     setError("")
     try {
-      console.log('Sending formData:', formData)
-      console.log('Specific fields - apellidos:', formData.apellidos, 'sexo:', formData.sexo, 'numero_historia:', formData.numero_historia)
       const predictionData = {
-        ...formData,
+        nombre: formData.nombre,
+        apellidos: formData.apellidos,
+        dni: formData.dni,
         edad: parseInt(formData.edad),
+        sexo: formData.sexo,
         peso: parseFloat(formData.peso),
         altura: parseInt(formData.altura),
         presionSistolica: parseInt(formData.presionSistolica),
         presionDiastolica: parseInt(formData.presionDiastolica),
-        colesterol: parseInt(formData.colesterol),
-        glucosa: parseInt(formData.glucosa),
+        colesterol: parseFloat(formData.colesterol),
+        glucosa: parseFloat(formData.glucosa),
         cigarrillosDia: parseInt(formData.cigarrillosDia),
-        anosTabaquismo: parseInt(formData.anosTabaquismo)
+        anosTabaquismo: parseInt(formData.anosTabaquismo),
+        actividadFisica: formData.actividadFisica || 'sedentario',
+        antecedentesCardiacos: formData.antecedentesCardiacos || 'no',
+        diabetes: false,
+        hipertension: false,
+        numero_historia: formData.numero_historia,
       }
+      console.log('Datos enviados a predict:', predictionData)
       const result = await predictionService.predict(predictionData)
       onPredict(result)
     } catch (err) {
@@ -73,13 +81,14 @@ export function PredictionForm({ formData, onFormChange, onPredict }: Prediction
   const isFormValid = () => {
     return (
       formData.nombre &&
+      formData.apellidos &&
+      formData.dni &&
       formData.edad &&
       formData.sexo &&
       formData.peso &&
       formData.altura &&
       formData.presionSistolica &&
       formData.presionDiastolica &&
-      formData.apellidos &&
       formData.numero_historia
     )
   }
@@ -101,10 +110,10 @@ export function PredictionForm({ formData, onFormChange, onPredict }: Prediction
             {/* Datos personales */}
             <div className="space-y-4">
               <h3 className="font-semibold text-gray-800 border-b pb-2">Información Personal</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <Label htmlFor="nombre" className="text-gray-700 font-medium">
-                    Nombre Completo *
+                    Nombre *
                   </Label>
                   <Input
                     id="nombre"
@@ -126,6 +135,21 @@ export function PredictionForm({ formData, onFormChange, onPredict }: Prediction
                     placeholder="Apellidos del paciente"
                     className="border-gray-300 focus:border-blue-500"
                     required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="dni" className="text-gray-700 font-medium">
+                    DNI *
+                  </Label>
+                  <Input
+                    id="dni"
+                    value={formData.dni}
+                    onChange={(e) => handleInputChange("dni", e.target.value)}
+                    placeholder="Número de DNI"
+                    className="border-gray-300 focus:border-blue-500"
+                    required
+                    pattern="[0-9]{8}"
+                    title="Ingrese un DNI válido de 8 dígitos"
                   />
                 </div>
               </div>

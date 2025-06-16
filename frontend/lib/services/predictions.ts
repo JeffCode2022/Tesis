@@ -5,6 +5,7 @@ export interface PredictionData {
   id?: string; // UUID opcional
   nombre: string;
   apellidos: string;
+  dni: string; // Añadido campo DNI
   edad: number;
   sexo: string;
   peso: number;
@@ -38,6 +39,7 @@ export const predictionService = {
       const patient = await patientService.createOrUpdate({
         nombre: data.nombre,
         apellidos: data.apellidos,
+        dni: data.dni,
         edad: data.edad,
         sexo: data.sexo,
         peso: data.peso,
@@ -87,6 +89,18 @@ export const predictionService = {
     } catch (error) {
       console.error('Error obteniendo predicción:', error);
       throw new Error('Error al obtener la predicción solicitada.');
+    }
+  },
+
+  async getLatestPredictionForPatient(patientId: string): Promise<PredictionResult | null> {
+    try {
+      // Asume que el backend puede filtrar por patient_id y ordenar por fecha para obtener la última
+      const response = await api.get<PredictionResult[]>(`/api/predictions/predictions/?patient=${patientId}&limit=1&order_by=-created_at`);
+      return response.data.length > 0 ? response.data[0] : null;
+    } catch (error: any) {
+      console.error(`Error obteniendo la última predicción para el paciente ${patientId}:`, error.message || error);
+      // Si hay un error (ej. 404 si no hay predicciones), simplemente retorna null
+      return null;
     }
   }
 }; 

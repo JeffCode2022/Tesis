@@ -6,42 +6,51 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-
-interface Patient {
-  nombre: string
-  edad: number
-  riesgo: string
-  fecha: string
-  probabilidad: number
-  imc?: number
-  presion?: string
-  colesterol?: number
-  glucosa?: number
-  telefono?: string
-  email?: string
-  direccion?: string
-  antecedentes?: string[]
-  medicamentos?: string[]
-  ultimaConsulta?: string
-}
+import { useEffect, useState } from "react"
+import { patientService, Patient as PatientType } from "@/lib/services/patients"
+import { User } from "lucide-react"
 
 interface PatientDetailsModalProps {
-  patient: Patient | null
+  patient: PatientType | null
   isOpen: boolean
   onClose: () => void
 }
 
 export function PatientDetailsModal({ patient, isOpen, onClose }: PatientDetailsModalProps) {
-  if (!patient) return null
+  const [fullPatient, setFullPatient] = useState<PatientType | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  const getRiskColor = (riesgo: string) => {
+  useEffect(() => {
+    if (isOpen && patient?.id) {
+      setLoading(true)
+      patientService.getPatient(patient.id)
+        .then(data => setFullPatient(data))
+        .catch(() => setFullPatient(patient))
+        .finally(() => setLoading(false))
+    } else {
+      setFullPatient(null)
+    }
+  }, [isOpen, patient])
+
+  if (!isOpen || !patient) return null
+  if (loading || !fullPatient) {
+    return (
+      <div className="min-h-[200px] flex items-center justify-center">
+        <span className="text-lg text-gray-500">Cargando detalles del paciente...</span>
+      </div>
+    )
+  }
+
+  const getRiskColor = (riesgo: string | null) => {
     switch (riesgo) {
       case "Alto":
         return "border-red-500 text-red-700 bg-red-50"
       case "Medio":
         return "border-yellow-500 text-yellow-700 bg-yellow-50"
-      default:
+      case "Bajo":
         return "border-green-500 text-green-700 bg-green-50"
+      default:
+        return "border-gray-500 text-gray-700 bg-gray-50"
     }
   }
 
@@ -52,15 +61,22 @@ export function PatientDetailsModal({ patient, isOpen, onClose }: PatientDetails
     return { category: "Obesidad", color: "text-red-600" }
   }
 
-  // Datos simulados adicionales
-  const patientData = {
-    ...patient,
-    telefono: patient.telefono || "+51 999 123 456",
-    email: patient.email || `${(patient.nombre || "").toLowerCase().replace(/\s/g, ".")}@email.com`,
-    direccion: patient.direccion || "Av. Principal 123, Lima, Perú",
-    antecedentes: patient.antecedentes || ["Hipertensión familiar", "Diabetes tipo 2 (padre)"],
-    medicamentos: patient.medicamentos || ["Enalapril 10mg", "Metformina 500mg"],
-    ultimaConsulta: patient.ultimaConsulta || "2024-01-10",
+  const formatDate = (dateString: string): string => {
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) { // Check for "Invalid Date"
+        return "N/A"
+      }
+      return date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })
+    } catch (e) {
+      console.error("Error formatting date:", e)
+      return "N/A"
+    }
+  }
+
+  const formatList = (text: string | undefined): string[] => {
+    if (!text) return []
+    return text.split(',').map(item => item.trim()).filter(item => item.length > 0)
   }
 
   return (
@@ -70,20 +86,19 @@ export function PatientDetailsModal({ patient, isOpen, onClose }: PatientDetails
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
-                <AvatarImage src={`/placeholder.svg?height=64&width=64`} />
                 <AvatarFallback className="bg-blue-100 text-blue-700 text-lg">
-                  {(patient.nombre || "").split(" ").map((n) => n[0]).join("") || "UN"}
+                  {(fullPatient.nombre_completo || "").split(" ").map((n) => n[0]).join("") || <User className="h-8 w-8" />}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <DialogTitle className="text-2xl">{patient.nombre || "Paciente Desconocido"}</DialogTitle>
+                <DialogTitle className="text-2xl">{fullPatient.nombre_completo || "Paciente Desconocido"}</DialogTitle>
                 <DialogDescription className="text-lg">
-                  {patient.edad} años • Última consulta: {patientData.ultimaConsulta}
+                  {fullPatient.edad} años • Última consulta: {fullPatient.ultimo_registro ? formatDate(fullPatient.ultimo_registro) : "N/A"}
                 </DialogDescription>
               </div>
             </div>
-            <Badge variant="outline" className={`px-4 py-2 text-lg ${getRiskColor(patient.riesgo)}`}>
-              Riesgo {patient.riesgo}
+            <Badge variant="outline" className={`px-4 py-2 text-lg ${getRiskColor(fullPatient.riesgo_actual)}`}>
+              Riesgo {fullPatient.riesgo_actual || "Desconocido"}
             </Badge>
           </div>
         </DialogHeader>
@@ -100,15 +115,15 @@ export function PatientDetailsModal({ patient, isOpen, onClose }: PatientDetails
             <CardContent className="space-y-3">
               <div className="flex items-center gap-3">
                 <Phone className="h-4 w-4 text-gray-500" />
-                <span>{patientData.telefono}</span>
+                <span>{fullPatient.telefono || "N/A"}</span>
               </div>
               <div className="flex items-center gap-3">
                 <Mail className="h-4 w-4 text-gray-500" />
-                <span>{patientData.email}</span>
+                <span>{fullPatient.email || "N/A"}</span>
               </div>
               <div className="flex items-center gap-3">
                 <MapPin className="h-4 w-4 text-gray-500" />
-                <span>{patientData.direccion}</span>
+                <span>{fullPatient.direccion || "N/A"}</span>
               </div>
             </CardContent>
           </Card>
@@ -124,32 +139,37 @@ export function PatientDetailsModal({ patient, isOpen, onClose }: PatientDetails
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-gray-800">{patient.probabilidad}%</div>
+                  <div className="text-2xl font-bold text-gray-800">
+                    {fullPatient.probabilidad !== undefined && fullPatient.probabilidad !== null
+                      ? `${Math.round(fullPatient.probabilidad)}%`
+                      : "N/A"}
+                  </div>
                   <div className="text-sm text-gray-600">Riesgo Cardiovascular</div>
                 </div>
-                {patient.imc && (
+                {fullPatient.imc && (
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <div className={`text-2xl font-bold ${getIMCCategory(patient.imc).color}`}>{patient.imc}</div>
+                    <div className={`text-2xl font-bold ${getIMCCategory(fullPatient.imc).color}`}>{fullPatient.imc}</div>
                     <div className="text-sm text-gray-600">IMC</div>
                   </div>
                 )}
               </div>
-              {patient.presion && (
+              {/* Comentado: Presión arterial. Asumo que se manejará con MedicalRecords si es necesario. */}
+              {/* {fullPatient.presion && (
                 <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
                   <span className="font-medium">Presión Arterial:</span>
-                  <span className="text-blue-700 font-bold">{patient.presion} mmHg</span>
+                  <span className="text-blue-700 font-bold">{fullPatient.presion} mmHg</span>
                 </div>
-              )}
-              {patient.colesterol && (
+              )} */}
+              {fullPatient.colesterol && (
                 <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
                   <span className="font-medium">Colesterol:</span>
-                  <span className="text-yellow-700 font-bold">{patient.colesterol} mg/dL</span>
+                  <span className="text-yellow-700 font-bold">{fullPatient.colesterol} mg/dL</span>
                 </div>
               )}
-              {patient.glucosa && (
+              {fullPatient.glucosa && (
                 <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
                   <span className="font-medium">Glucosa:</span>
-                  <span className="text-green-700 font-bold">{patient.glucosa} mg/dL</span>
+                  <span className="text-green-700 font-bold">{fullPatient.glucosa} mg/dL</span>
                 </div>
               )}
             </CardContent>
@@ -165,12 +185,15 @@ export function PatientDetailsModal({ patient, isOpen, onClose }: PatientDetails
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {patientData.antecedentes.map((antecedente, index) => (
+                {formatList(fullPatient.antecedentes_cardiacos).map((antecedente, index) => (
                   <div key={index} className="flex items-center gap-3 p-2 bg-orange-50 rounded-lg">
                     <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
                     <span className="text-sm text-orange-800">{antecedente}</span>
                   </div>
                 ))}
+                {formatList(fullPatient.antecedentes_cardiacos).length === 0 && (
+                  <span className="text-sm text-gray-500">No hay antecedentes registrados.</span>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -185,12 +208,15 @@ export function PatientDetailsModal({ patient, isOpen, onClose }: PatientDetails
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {patientData.medicamentos.map((medicamento, index) => (
+                {formatList(fullPatient.medicamentos_actuales).map((medicamento, index) => (
                   <div key={index} className="flex items-center gap-3 p-2 bg-blue-50 rounded-lg">
                     <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                     <span className="text-sm text-blue-800">{medicamento}</span>
                   </div>
                 ))}
+                {formatList(fullPatient.medicamentos_actuales).length === 0 && (
+                  <span className="text-sm text-gray-500">No hay medicamentos registrados.</span>
+                )}
               </div>
             </CardContent>
           </Card>

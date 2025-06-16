@@ -105,123 +105,52 @@ instance.interceptors.request.use(
 
 // Interceptor para manejar errores
 instance.interceptors.response.use(
-  (response: AxiosResponse) => {
-    console.log('[api.ts] Respuesta exitosa:', {
-      url: response.config.url,
-      status: response.status,
-      headers: response.headers
-    })
-    return response
-  },
+  (response: AxiosResponse) => response,
   async (error: AxiosError) => {
-    try {
-      // Manejo de errores de red
-      if (!error.response && !error.request) {
-        console.error('[api.ts] Error de configuración:', error.message)
-        return Promise.reject(new Error('Error de configuración en la petición'))
-      }
+    const originalRequest = error.config;
+    const storage = getStorage();
 
-      // Manejo de errores de respuesta del servidor
-      if (error.response) {
-        const { status, data, config } = error.response
-        
-        // Log detallado del error
-        console.error('[api.ts] Error de respuesta:', {
-          status,
-          url: config?.url,
-          method: config?.method,
-          requestHeaders: config?.headers,
-          responseHeaders: error.response.headers,
-          responseData: error.response.data,
-          message: error.message,
-          withCredentials: config?.withCredentials
-        })
-        
-        // Manejo específico para errores 401
-        if (status === 401) {
-          const token = getAuthToken()
-          const storage = getStorage()
-          
-          console.log('[api.ts] Error 401: Detalles completos:', {
-            requestHeaders: config?.headers,
-            responseHeaders: error.response.headers,
-            responseData: error.response.data,
-            withCredentials: config?.withCredentials,
-            token: token ? token.substring(0, 20) + '...' : 'No token',
-            url: config?.url,
-            method: config?.method,
-            storage: {
-              localStorage: storage.getItem('auth_token') ? 'Presente' : 'Ausente',
-              sessionStorage: storage.getItem('auth_token') ? 'Presente' : 'Ausente',
-              currentStorage: storage === localStorage ? 'localStorage' : 'sessionStorage'
-            }
-          })
-          
-          // Verificar si el token existe
-          if (!token) {
-            console.log('[api.ts] No hay token disponible')
-            clearAuthData()
-            redirectToLogin()
-            return Promise.reject(new Error('No hay token de autenticación'))
-          }
-
-          // Intentar refrescar el token antes de limpiar los datos
-          try {
-            const refreshToken = storage.getItem("refresh_token")
-            if (refreshToken) {
-              console.log('[api.ts] Intentando refrescar el token...')
-              const response = await instance.post("/api/token/refresh/", {
-                refresh: refreshToken
-              })
-              
-              if (response.data.access) {
-                console.log('[api.ts] Token refrescado exitosamente')
-                storage.setItem("auth_token", response.data.access)
-                // Reintentar la petición original con el nuevo token
-                if (config) {
-                  config.headers.Authorization = `Bearer ${response.data.access}`
-                  return instance(config)
-                }
-              }
-            } else {
-              console.log('[api.ts] No hay refresh token disponible')
-            }
-          } catch (refreshError) {
-            console.error('[api.ts] Error al refrescar el token:', refreshError)
-            // Rechazar explícitamente la promesa aquí para propagar el error
-            return Promise.reject(refreshError)
-          }
-
-          // Si el refresh falló o no hay refresh token, limpiar datos y redirigir
-          console.log('[api.ts] No se pudo refrescar el token, limpiando datos...')
-          clearAuthData()
-          redirectToLogin()
-          return Promise.reject(new Error('Sesión expirada'))
-        }
-
-        // Manejo de errores de cliente (4xx)
-        if (status >= 400 && status < 500) {
-          console.error('[api.ts] Error de cliente:', data)
-          const errorMessage = (data as any)?.detail || (data as any)?.message || 'Error de cliente';
-          return Promise.reject(new Error(errorMessage))
-        }
-
-        // Manejo de errores del servidor (5xx)
-        if (status >= 500) {
-          console.error('[api.ts] Error de servidor:', data)
-          const errorMessage = (data as any)?.detail || (data as any)?.message || 'Error del servidor';
-          return Promise.reject(new Error(errorMessage))
-        }
-      }
-
-      // Otros errores (ej. de red sin respuesta del servidor)
-      console.error('[api.ts] Error de red:', error.message, error.request ? 'con request' : 'sin request', error.config?.withCredentials ? 'con credenciales' : 'sin credenciales')
-      return Promise.reject(new Error('No se recibió respuesta del servidor'))
-
-    } catch (finalError) {
-      console.error('[api.ts] Error inesperado en el interceptor de errores:', finalError)
-      return Promise.reject(new Error('Error inesperado'))
+    // Si no hay configuración original, rechazar inmediatamente
+    if (!originalRequest) {
+      return Promise.reject(error);
     }
+
+    // Si el error es 401 y no es una petición de refresh
+    if (error.response?.status === 401 && !originalRequest.url?.includes('/token/refresh/')) {
+      try {
+        const refreshToken = storage.getItem("refresh_token");
+        if (refreshToken) {
+          console.log('[api.ts] Intentando refrescar el token...');
+          const response = await instance.post("/api/token/refresh/", {
+            refresh: refreshToken
+          });
+          
+          if (response.data.access) {
+            console.log('[api.ts] Token refrescado exitosamente');
+            storage.setItem("auth_token", response.data.access);
+            originalRequest.headers.Authorization = `Bearer ${response.data.access}`;
+            return instance(originalRequest);
+          }
+        }
+      } catch (refreshError) {
+        console.error('[api.ts] Error al refrescar el token:', refreshError);
+      }
+
+      // Si llegamos aquí, el refresh falló o no hay refresh token
+      console.log('[api.ts] No se pudo refrescar el token, limpiando datos...');
+      clearAuthData();
+      redirectToLogin();
+      return Promise.reject(new Error('Sesión expirada'));
+    }
+
+    // Para otros errores, extraer el mensaje de error del backend
+    const errorData = error.response?.data as { detail?: string; message?: string } | undefined;
+    const errorMessage = errorData?.detail || 
+                        errorData?.message || 
+                        error.message || 
+                        'Error en la petición';
+    
+    return Promise.reject(new Error(errorMessage));
   }
 )
 
