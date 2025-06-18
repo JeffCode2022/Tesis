@@ -115,8 +115,9 @@ export function PatientsList({ importedPatients = [], onError }: PatientsListPro
                 onClick={() => handleViewDetails(paciente)}
               >
                 <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    {/* Info principal */}
+                    <div className="flex items-center gap-4 min-w-[220px]">
                       <Avatar className="h-12 w-12">
                         <AvatarFallback className="bg-blue-100 text-blue-700">
                           {paciente.nombre_completo
@@ -130,22 +131,23 @@ export function PatientsList({ importedPatients = [], onError }: PatientsListPro
                       <div>
                         <div className="font-semibold text-gray-800">{paciente.nombre_completo}</div>
                         <div className="text-sm text-gray-600">
-                          {paciente.edad} años • IMC: {paciente.imc !== undefined && paciente.imc !== null ? paciente.imc : "N/A"} • {formatDate(paciente.ultimo_registro)}
+                          {paciente.edad} años • IMC: {paciente.imc !== undefined && paciente.imc !== null ? paciente.imc : "N/A"}
                         </div>
-                        {/* Campo de presión comentado, ya que no forma parte de la interfaz Patient */}
+                        <div className="text-xs text-gray-400">{formatDate(paciente.ultimo_registro)}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-6">
+                    {/* Probabilidad y riesgo */}
+                    <div className="flex items-center gap-6 min-w-[180px] justify-end">
                       <div className="text-center">
                         <div className="text-2xl font-bold text-gray-800">
-                          {paciente.probabilidad !== undefined && paciente.probabilidad !== null
-                            ? `${Math.round(paciente.probabilidad)}%`
+                          {paciente.riesgo_actual?.probabilidad !== undefined && paciente.riesgo_actual?.probabilidad !== null
+                            ? `${Math.round(paciente.riesgo_actual.probabilidad)}%`
                             : "N/A"}
                         </div>
                         <div className="text-xs text-gray-500">Probabilidad</div>
                       </div>
-                      <Badge variant="outline" className={`px-3 py-1 ${getRiskColor(paciente.riesgo_actual)}`}>
-                        {paciente.riesgo_actual || "Desconocido"}
+                      <Badge variant="outline" className={`px-3 py-1 ${getRiskColor(paciente.riesgo_actual?.riesgo_nivel)}`}>
+                        {paciente.riesgo_actual?.riesgo_nivel || "Desconocido"}
                       </Badge>
                       <Button
                         variant="outline"

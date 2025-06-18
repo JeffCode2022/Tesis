@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { authService } from "@/lib/services/auth"
+import { jwtDecode } from "jwt-decode"
+import { authService, clearAuthData } from "@/lib/services/auth"
 
 export function useAuth(requireAuth = true) {
   const router = useRouter()
@@ -12,18 +13,43 @@ export function useAuth(requireAuth = true) {
 
   useEffect(() => {
     isMounted.current = true
+    console.log('[useAuth] useEffect: Verificando autenticación inicial.');
     const checkAuth = async () => {
       try {
-        const authenticated = authService.isAuthenticated()
+        const token = authService.getToken();
+        let authenticated = false;
+        if (token) {
+          try {
+            const decoded: any = jwtDecode(token);
+            const now = Date.now() / 1000;
+            if (decoded.exp && decoded.exp > now) {
+              authenticated = true;
+            } else {
+              // Token expirado
+              clearAuthData();
+              authenticated = false;
+              window.location.href = "/login";
+              return;
+            }
+          } catch (e) {
+            // Token inválido
+            clearAuthData();
+            authenticated = false;
+            window.location.href = "/login";
+            return;
+          }
+        }
         if (isMounted.current) {
           setIsAuthenticated(authenticated)
           setUser(authService.getUser())
+          console.log('[useAuth] useEffect: Estado de autenticación establecido:', { authenticated, user: authService.getUser() });
         }
       } catch (error) {
         console.error("Error checking auth:", error)
       } finally {
         if (isMounted.current) {
           setIsLoading(false)
+          console.log('[useAuth] useEffect: isLoading establecido a false.');
         }
       }
     }
@@ -47,9 +73,11 @@ export function useAuth(requireAuth = true) {
       const response = await authService.login({ email, password, rememberMe })
       setIsAuthenticated(true)
       setUser(response.user)
-      router.push("/dashboard")
+      console.log('[useAuth] Login exitoso: Estado de autenticación actualizado.', { isAuthenticated: true, user: response.user });
+      window.location.href = "/dashboard"
       return response
     } catch (error) {
+      console.error('[useAuth] Error en el login:', error);
       throw error
     }
   }

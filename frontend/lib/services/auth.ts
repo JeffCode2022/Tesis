@@ -69,9 +69,6 @@ export const setAuthData = (data: { token: string; refresh: string; user: User }
       user: data.user
     });
     
-    // Limpiar datos existentes primero
-    clearAuthData()
-    
     // Guardar nuevos datos
     storage.setItem("auth_token", data.token)
     storage.setItem("refresh_token", data.refresh)
@@ -99,9 +96,26 @@ export const setAuthData = (data: { token: string; refresh: string; user: User }
       refresh: savedRefresh.substring(0, 20) + '...',
       user: parsedUser
     });
+
+    console.log('[auth.ts] setAuthData: Datos de autenticación guardados. Token: ' + data.token.substring(0, 10) + '..., Refresh: ' + data.refresh.substring(0, 10) + '..., Usuario: ' + data.user.email);
+    
+    // Establecer una cookie para que el middleware pueda verificar la autenticación
+    Cookies.set('is_authenticated', 'true', { 
+      expires: rememberMe ? 7 : undefined, // Expira en 7 días si rememberMe es true, o al cerrar la sesión
+      secure: process.env.NODE_ENV === 'production', // Solo enviar en HTTPS en producción
+      sameSite: 'Lax', // Protege contra CSRF
+      path: '/' // Disponible en todas las rutas
+    });
+    // Guardar el token de acceso en una cookie para el middleware
+    Cookies.set('auth_token', data.token, {
+      expires: rememberMe ? 7 : undefined,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'Lax',
+      path: '/'
+    });
+
   } catch (error) {
     console.error("Error al guardar datos de autenticación:", error)
-    clearAuthData()
     throw error
   }
 }
@@ -121,6 +135,12 @@ export const clearAuthData = (): void => {
     sessionStorage.removeItem("refresh_token")
     sessionStorage.removeItem("auth_user")
     sessionStorage.removeItem("rememberMe")
+
+    // Eliminar la cookie de autenticación
+    Cookies.remove('is_authenticated', { path: '/' });
+    // Eliminar la cookie del token de acceso
+    Cookies.remove('auth_token', { path: '/' });
+
     console.log('[auth.ts] Datos de autenticación limpiados.');
   } catch (error) {
     console.error("Error al limpiar datos de autenticación:", error)
@@ -163,6 +183,7 @@ export const authService = {
   async login(data: LoginData): Promise<AuthResponse> {
     try {
       console.log('[auth.ts] Iniciando login...', { email: data.email, rememberMe: data.rememberMe })
+      console.log('[auth.ts] Datos a enviar al backend:', { email: data.email, password: data.password });
       const response = await api.post<AuthResponse>("/api/authentication/login/", {
         email: data.email,
         password: data.password,
@@ -184,26 +205,22 @@ export const authService = {
       }
 
       // Guardar datos de autenticación
-      const storage = data.rememberMe ? localStorage : sessionStorage
-      storage.setItem("auth_token", response.data.access)
-      storage.setItem("refresh_token", response.data.refresh)
-      storage.setItem("auth_user", JSON.stringify(response.data.user))
-      storage.setItem("rememberMe", String(data.rememberMe))
-
-      // Guardar el token en cookies para el middleware
-      Cookies.set('auth_token', response.data.access, { expires: data.rememberMe ? 7 : undefined })
-
-      // Verificar que los tokens se guardaron correctamente
-      const savedToken = storage.getItem("auth_token")
-      const savedRefresh = storage.getItem("refresh_token")
-      console.log('[auth.ts] Tokens guardados:', {
-        token: savedToken ? 'Presente' : 'Ausente',
-        refresh: savedRefresh ? 'Presente' : 'Ausente'
-      });
+      setAuthData({
+        token: response.data.access,
+        refresh: response.data.refresh,
+        user: response.data.user
+      }, data.rememberMe)
 
       return response.data
     } catch (error) {
       console.error("[auth.ts] Error en login:", error)
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401) {
+          throw new AuthError("Credenciales inválidas", "INVALID_CREDENTIALS")
+        } else if (error.response?.status === 400) {
+          throw new AuthError(error.response.data.message || "Datos de inicio de sesión inválidos", "INVALID_DATA")
+        }
+      }
       throw error
     }
   },

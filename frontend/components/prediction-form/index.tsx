@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
 import { predictionService } from "@/lib/services/predictions"
+import { patientService } from "@/lib/services/patients"
 
 interface FormData {
   nombre: string
@@ -93,6 +94,41 @@ export function PredictionForm({ formData, onFormChange, onPredict }: Prediction
     )
   }
 
+  const handleDniBlur = async () => {
+    if (formData.dni && formData.dni.length === 8) {
+      try {
+        const patients = await patientService.getPatientByDni(formData.dni)
+        const patient = patients.find(p => p.dni === formData.dni)
+        if (patient) {
+          let nombre = patient.nombre || ""
+          let apellidos = patient.apellidos || ""
+          if ((!nombre || !apellidos) && patient.nombre_completo) {
+            const partes = patient.nombre_completo.trim().split(" ")
+            nombre = partes[0] || ""
+            apellidos = partes.slice(1).join(" ") || ""
+          }
+          onFormChange("nombre", nombre)
+          onFormChange("apellidos", apellidos)
+          onFormChange("edad", patient.edad ? String(patient.edad) : "")
+          onFormChange("sexo", patient.sexo || "")
+          onFormChange("numero_historia", patient.numero_historia || "")
+        } else {
+          onFormChange("nombre", "")
+          onFormChange("apellidos", "")
+          onFormChange("edad", "")
+          onFormChange("sexo", "")
+          onFormChange("numero_historia", "")
+        }
+      } catch (e) {
+        onFormChange("nombre", "")
+        onFormChange("apellidos", "")
+        onFormChange("edad", "")
+        onFormChange("sexo", "")
+        onFormChange("numero_historia", "")
+      }
+    }
+  }
+
   return (
     <TooltipProvider>
       <Card className="shadow-xl border-0 bg-gradient-to-br from-white to-blue-50">
@@ -145,6 +181,7 @@ export function PredictionForm({ formData, onFormChange, onPredict }: Prediction
                     id="dni"
                     value={formData.dni}
                     onChange={(e) => handleInputChange("dni", e.target.value)}
+                    onBlur={handleDniBlur}
                     placeholder="Número de DNI"
                     className="border-gray-300 focus:border-blue-500"
                     required

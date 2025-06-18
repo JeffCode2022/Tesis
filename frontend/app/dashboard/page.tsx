@@ -49,7 +49,6 @@ const adaptMetrics = (metrics: DashboardMetrics) => ({
 export default function Dashboard() {
   const { isAuthenticated, user, isLoading } = useAuth()
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
   const [activeSection, setActiveSection] = useState('dashboard')
 
   // Estados
@@ -121,16 +120,6 @@ export default function Dashboard() {
       loadData()
     }
   }, [isAuthenticated])
-
-  useEffect(() => {
-    setMounted(true)
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('auth_token')
-      if (!token) {
-        window.location.href = '/login'
-      }
-    }
-  }, [])
 
   // Manejadores de eventos
   const handleFormChange = (field: string, value: string) => {
@@ -324,14 +313,6 @@ export default function Dashboard() {
     }
   }
 
-  if (!mounted) {
-    return null
-  }
-
-  if (typeof window !== 'undefined' && !localStorage.getItem('auth_token')) {
-    return <div>Cargando...</div>;
-  }
-
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
@@ -341,7 +322,11 @@ export default function Dashboard() {
   }
 
   if (!isAuthenticated) {
-    return null
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="text-2xl font-semibold text-red-600 dark:text-red-400">No tienes acceso. Por favor inicia sesión.</div>
+      </div>
+    )
   }
 
   return (

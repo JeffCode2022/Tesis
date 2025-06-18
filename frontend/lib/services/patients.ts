@@ -22,6 +22,7 @@ export interface Patient {
   direccion?: string;
   antecedentes_cardiacos?: string;
   medicamentos_actuales?: string;
+  nombre_completo?: string;
 }
 
 export interface MedicalRecord {
@@ -101,7 +102,7 @@ export const patientService = {
 
   async getLatestMedicalRecordForPatient(patientId: string): Promise<MedicalRecord | null> {
     try {
-      const response = await api.get<MedicalRecord[]>(`/api/patients/${patientId}/medical_history/?limit=1&order_by=-fecha_registro`);
+      const response = await api.get<MedicalRecord[]>(`/api/patients/${patientId}/medical_records/?limit=1&order_by=-fecha_registro`);
       return response.data.length > 0 ? response.data[0] : null;
     } catch (error) {
       console.error(`Error obteniendo el último registro médico para el paciente ${patientId}:`, error);
@@ -166,5 +167,15 @@ export const patientService = {
       console.error('Error creando registro médico:', error);
       throw error instanceof Error ? error : new Error('Error al crear el registro médico');
     }
-  }
+  },
+
+  async getPatientByDni(dni: string): Promise<Patient[]> {
+    try {
+      const response = await api.get<PaginatedPatientsResponse>(`/api/patients/?dni=${dni}`);
+      return response.data.results || [];
+    } catch (error) {
+      console.error('Error buscando paciente por DNI:', error);
+      return [];
+    }
+  },
 }; 

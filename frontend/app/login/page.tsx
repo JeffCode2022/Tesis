@@ -27,11 +27,25 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
+      if (!email || !password) {
+        throw new Error("Por favor, complete todos los campos")
+      }
+
       const loginResponse = await login(email, password, rememberMe)
       console.log("Login exitoso, respuesta:", loginResponse)
+      router.push("/dashboard")
+      console.log("Login: Redirigiendo a /dashboard...")
     } catch (err: any) {
       console.error("Error en el login:", err)
-      setError(err.response?.data?.message || "Error al iniciar sesión. Por favor, intente nuevamente.")
+      if (err.response?.status === 401) {
+        setError("Credenciales inválidas. Por favor, verifique su correo y contraseña.")
+      } else if (err.response?.status === 400) {
+        setError(err.response.data.message || "Datos de inicio de sesión inválidos")
+      } else if (err.message) {
+        setError(err.message)
+      } else {
+        setError("Error al iniciar sesión. Por favor, intente nuevamente.")
+      }
     } finally {
       setLoading(false)
       console.log("Login: Loading establecido en false.")
@@ -69,6 +83,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="border-gray-300 focus:border-blue-500"
+                disabled={loading}
               />
             </div>
 
@@ -81,6 +96,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 className="border-gray-300 focus:border-blue-500"
+                disabled={loading}
               />
             </div>
 
@@ -89,6 +105,7 @@ export default function LoginPage() {
                 id="rememberMe"
                 checked={rememberMe}
                 onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                disabled={loading}
               />
               <Label
                 htmlFor="rememberMe"
@@ -107,19 +124,8 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="text-center space-y-2">
-            <p className="text-sm text-gray-600">
-              ¿No tienes una cuenta?{" "}
-              <Link href="/register" className="text-blue-600 hover:text-blue-700 font-medium">
-                Regístrate aquí
-              </Link>
-            </p>
-            <Link
-              href="/forgot-password"
-              className="text-sm text-gray-600 hover:text-gray-800 block"
-            >
-              ¿Olvidaste tu contraseña?
-            </Link>
+          <div className="space-y-2 text-center">
+            {/* Enlace de recuperación de contraseña eliminado */}
           </div>
         </CardContent>
       </Card>

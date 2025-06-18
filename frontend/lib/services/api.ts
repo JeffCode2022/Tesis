@@ -43,6 +43,17 @@ const redirectToLogin = (): void => {
   }
 }
 
+// Función auxiliar para obtener el token CSRF de las cookies
+const getCsrfToken = (): string | null => {
+  if (typeof window === 'undefined') return null
+  const name = 'csrftoken'
+  const cookieValue = document.cookie.split(';').find(c => c.trim().startsWith(name + '='))
+  if (cookieValue) {
+    return decodeURIComponent(cookieValue.trim().substring(name.length + 1))
+  }
+  return null
+}
+
 // Crear la instancia de axios
 const instance = axios.create({
   baseURL: API_URL,
@@ -57,25 +68,45 @@ const instance = axios.create({
 // Interceptor para agregar el token a las peticiones
 instance.interceptors.request.use(
   async (config) => {
-    const token = getAuthToken()
-    if (token) {
-      // Asegurarse de que el token comienza con 'Bearer ' y no tiene doble prefijo
-      const authToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`
-      config.headers.Authorization = authToken
-      
-      console.log('[api.ts] Interceptor de petición:', {
-        url: config.url,
-        method: config.method,
-        headers: {
-          ...config.headers,
-          Authorization: authToken.substring(0, 20) + '...' // Mostrar solo el inicio del token
-        },
-        withCredentials: config.withCredentials,
-        token: token.substring(0, 20) + '...' // Mostrar solo el inicio del token
-      })
+    // No añadir token de autenticación para las rutas de login o registro
+    const isAuthEndpoint = config.url?.includes('/authentication/login/') || config.url?.includes('/register/')
+
+    if (!isAuthEndpoint) {
+      const token = getAuthToken()
+      if (token) {
+        const authToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`
+        config.headers.Authorization = authToken
+      } else {
+        console.log('[api.ts] Interceptor de petición: No hay token de autenticación disponible para adjuntar.')
+      }
     } else {
-      console.log('[api.ts] Interceptor de petición: No hay token disponible para adjuntar.')
-      // Intentar refrescar el token si no está disponible
+      console.log('[api.ts] Interceptor de petición: No se añade token de autenticación para la ruta de login/registro.')
+      delete config.headers.Authorization; // Asegurarse de que no se envía ningún encabezado de autorización
+    }
+
+    // Añadir el token CSRF para métodos que lo requieran
+    const csrfToken = getCsrfToken()
+    const isSafeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(config.method?.toUpperCase() || '')
+    if (csrfToken && !isSafeMethod) {
+      config.headers['X-CSRFToken'] = csrfToken
+      console.log('[api.ts] Interceptor de petición: CSRF Token adjuntado.')
+    } else if (!isSafeMethod) {
+      console.warn('[api.ts] Interceptor de petición: No se encontró CSRF Token para una petición no segura.')
+    }
+
+    console.log('[api.ts] Interceptor de petición:', {
+      url: config.url,
+      method: config.method,
+      headers: {
+        ...config.headers,
+        Authorization: config.headers.Authorization ? (config.headers.Authorization as string).substring(0, 20) + '...' : 'No Token',
+        'X-CSRFToken': csrfToken ? csrfToken.substring(0, 10) + '...' : 'No CSRF Token'
+      },
+      withCredentials: config.withCredentials,
+    })
+
+    // Intentar refrescar el token si no está disponible (solo si no es la petición de login/register)
+    if (!config.headers.Authorization && !isAuthEndpoint) {
       try {
         const storage = getStorage()
         const refreshToken = storage.getItem("refresh_token")
@@ -95,6 +126,7 @@ instance.interceptors.request.use(
         console.error('[api.ts] Error al refrescar el token:', refreshError)
       }
     }
+
     return config
   },
   (error) => {
@@ -129,6 +161,7 @@ instance.interceptors.response.use(
             console.log('[api.ts] Token refrescado exitosamente');
             storage.setItem("auth_token", response.data.access);
             originalRequest.headers.Authorization = `Bearer ${response.data.access}`;
+            originalRequest.headers['X-CSRFToken'] = getCsrfToken(); // Añadir CSRF al reintento
             return instance(originalRequest);
           }
         }

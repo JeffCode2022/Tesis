@@ -79,6 +79,8 @@ export function PatientDetailsModal({ patient, isOpen, onClose }: PatientDetails
     return text.split(',').map(item => item.trim()).filter(item => item.length > 0)
   }
 
+  const prediccion = fullPatient.riesgo_actual;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -97,8 +99,8 @@ export function PatientDetailsModal({ patient, isOpen, onClose }: PatientDetails
                 </DialogDescription>
               </div>
             </div>
-            <Badge variant="outline" className={`px-4 py-2 text-lg ${getRiskColor(fullPatient.riesgo_actual)}`}>
-              Riesgo {fullPatient.riesgo_actual || "Desconocido"}
+            <Badge variant="outline" className={`px-4 py-2 text-lg ${getRiskColor(prediccion?.riesgo_nivel)}`}>
+              Riesgo {prediccion?.riesgo_nivel || "Desconocido"}
             </Badge>
           </div>
         </DialogHeader>
@@ -140,8 +142,8 @@ export function PatientDetailsModal({ patient, isOpen, onClose }: PatientDetails
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <div className="text-2xl font-bold text-gray-800">
-                    {fullPatient.probabilidad !== undefined && fullPatient.probabilidad !== null
-                      ? `${Math.round(fullPatient.probabilidad)}%`
+                    {prediccion?.probabilidad !== undefined && prediccion?.probabilidad !== null
+                      ? `${Math.round(prediccion.probabilidad)}%`
                       : "N/A"}
                   </div>
                   <div className="text-sm text-gray-600">Riesgo Cardiovascular</div>
@@ -223,6 +225,27 @@ export function PatientDetailsModal({ patient, isOpen, onClose }: PatientDetails
         </div>
 
         <Separator className="my-6" />
+
+        {/* Recomendaciones */}
+        {prediccion?.recomendaciones && prediccion.recomendaciones.length > 0 && (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Heart className="h-5 w-5" />
+                  Recomendaciones
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul>
+                  {prediccion.recomendaciones.map((rec: string, idx: number) => (
+                    <li key={idx} className="text-sm text-blue-700 mb-1">• {rec}</li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={onClose}>
