@@ -11,8 +11,6 @@ from .serializers import PredictionSerializer, ModelPerformanceSerializer
 from .services import PredictionService
 from apps.patients.models import Patient, MedicalRecord
 import logging
-from datetime import timedelta
-from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -101,19 +99,6 @@ class PredictionViewSet(viewsets.ModelViewSet):
                 return Response(
                     {'error': f'Faltan datos requeridos en el registro médico: {", ".join(missing_fields)}'},
                     status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Verificar si ya existe una predicción reciente para este paciente y registro médico
-            tiempo_limite = timezone.now() - timedelta(minutes=2)
-            existe_prediccion = Prediction.objects.filter(
-                patient=patient,
-                medical_record=medical_record,
-                created_at__gte=tiempo_limite
-            ).exists()
-            if existe_prediccion:
-                return Response(
-                    {'error': 'Ya existe una predicción reciente para este paciente y registro médico.'},
-                    status=status.HTTP_409_CONFLICT
                 )
 
             try:
