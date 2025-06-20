@@ -85,14 +85,15 @@ export const patientService = {
         latestMedicalRecordPromise
       ]);
 
-      // Combinar los datos del paciente con la probabilidad y el riesgo de la predicción, y los datos del registro médico
+      console.log('getPatient - patientData:', patientData);
+      console.log('getPatient - latestPrediction:', latestPrediction);
       return {
         ...patientData,
-        probabilidad: latestPrediction?.probabilidad || undefined,
-        riesgo_actual: latestPrediction?.riesgo || patientData.riesgo_actual,
-        ultimo_registro: latestPrediction?.updated_at || latestMedicalRecord?.fecha_registro || patientData.ultimo_registro,
-        antecedentes_cardiacos: latestMedicalRecord?.antecedentes_cardiacos || patientData.antecedentes_cardiacos,
-        medicamentos_actuales: latestMedicalRecord?.medicamentos_actuales || patientData.medicamentos_actuales,
+        probabilidad: latestPrediction?.probabilidad ?? patientData.probabilidad,
+        riesgo_actual: latestPrediction ?? patientData.riesgo_actual,
+        ultimo_registro: latestPrediction?.updated_at ?? latestMedicalRecord?.fecha_registro ?? patientData.ultimo_registro,
+        antecedentes_cardiacos: latestMedicalRecord?.antecedentes_cardiacos ?? patientData.antecedentes_cardiacos,
+        medicamentos_actuales: latestMedicalRecord?.medicamentos_actuales ?? patientData.medicamentos_actuales,
       };
     } catch (error) {
       console.error('Error obteniendo paciente:', error);
@@ -102,7 +103,7 @@ export const patientService = {
 
   async getLatestMedicalRecordForPatient(patientId: string): Promise<MedicalRecord | null> {
     try {
-      const response = await api.get<MedicalRecord[]>(`/api/patients/${patientId}/medical_records/?limit=1&order_by=-fecha_registro`);
+      const response = await api.get<MedicalRecord[]>(`/api/medical-records/?patient=${patientId}&limit=1&order_by=-fecha_registro`);
       return response.data.length > 0 ? response.data[0] : null;
     } catch (error) {
       console.error(`Error obteniendo el último registro médico para el paciente ${patientId}:`, error);

@@ -46,6 +46,33 @@ const adaptMetrics = (metrics: DashboardMetrics) => ({
   previous_month_growth: 0
 })
 
+// Componente para mostrar el resumen en tiempo real (IMC y categoría)
+function RealTimeSummaryCard({ formData }: { formData: any }) {
+  const peso = parseFloat(formData.peso)
+  const altura = parseFloat(formData.altura)
+  const imc = peso && altura && peso > 0 && altura > 0 ? peso / ((altura / 100) * (altura / 100)) : null
+  const getIMCCategory = (imc: number) => {
+    if (imc < 18.5) return { label: "Bajo peso", color: "text-blue-600 dark:text-blue-400" }
+    if (imc < 25) return { label: "Normal", color: "text-green-600 dark:text-green-400" }
+    if (imc < 30) return { label: "Sobrepeso", color: "text-yellow-600 dark:text-yellow-400" }
+    return { label: "Obesidad", color: "text-red-600 dark:text-red-400" }
+  }
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 flex flex-col items-center justify-center min-h-[180px]">
+      <h4 className="font-semibold text-gray-800 dark:text-white mb-2">Cálculos en Tiempo Real</h4>
+      <div className="inline-block px-4 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 shadow text-sm">
+        <span className="font-semibold text-gray-800 dark:text-white">IMC: </span>
+        <span className="font-bold text-lg">
+          {imc ? imc.toFixed(2) : "N/A"}
+        </span>
+        {imc && (
+          <span className={`ml-3 font-semibold ${getIMCCategory(imc).color}`}>{getIMCCategory(imc).label}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { isAuthenticated, user, isLoading } = useAuth()
   const router = useRouter()
@@ -235,7 +262,7 @@ export default function Dashboard() {
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Model Accuracy and Risk Distribution */}
-              <div className="bg-white rounded-lg shadow p-6">
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6">
                 <h3 className="text-lg font-semibold mb-4">Precisión del Modelo y Distribución de Riesgo</h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
@@ -249,7 +276,7 @@ export default function Dashboard() {
               </div>
 
               {/* Age Risk Distribution */}
-              <div className="bg-white rounded-lg shadow p-6">
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6">
                 <h3 className="text-lg font-semibold mb-4">Distribución de Riesgo por Edad</h3>
                 <div className="h-[300px]">
                   <RealTimeAnalysis data={metrics.age_risk_distribution} type="age" />
@@ -257,7 +284,7 @@ export default function Dashboard() {
               </div>
 
               {/* Monthly Evolution */}
-              <div className="bg-white rounded-lg shadow p-6">
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6">
                 <h3 className="text-lg font-semibold mb-4">Evolución Mensual</h3>
                 <div className="h-[300px]">
                   <RealTimeAnalysis data={metrics.monthly_evolution} type="monthly" />
@@ -265,7 +292,7 @@ export default function Dashboard() {
               </div>
 
               {/* Common Risk Factors */}
-              <div className="bg-white rounded-lg shadow p-6">
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6">
                 <h3 className="text-lg font-semibold mb-4">Factores de Riesgo Comunes</h3>
                 <div className="h-[300px]">
                   <RealTimeAnalysis data={metrics.common_risk_factors} type="factors" />
@@ -278,21 +305,30 @@ export default function Dashboard() {
         return <PatientsList importedPatients={importedPatients} />
       case 'predictions':
         return (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold mb-4">Nueva Predicción</h3>
-              <PredictionForm 
-                formData={formData}
-                onFormChange={handleFormChange}
-                onPredict={handlePredict}
-              />
+          <>
+            <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 flex flex-col lg:col-span-2">
+                <h3 className="text-lg font-semibold mb-4">Nueva Predicción</h3>
+                <PredictionForm 
+                  formData={formData}
+                  onFormChange={handleFormChange}
+                  onPredict={handlePredict}
+                />
+              </div>
+              <div className="hidden lg:block">
+                <RealTimeSummaryCard formData={formData} />
+              </div>
+            </div>
+            {/* En móviles, mostrar el resumen debajo del formulario */}
+            <div className="block lg:hidden mt-4">
+              <RealTimeSummaryCard formData={formData} />
             </div>
             {prediction && (
-              <div className="bg-white rounded-lg shadow p-6">
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 flex flex-col mt-6">
                 <PredictionResults prediction={prediction} />
               </div>
             )}
-          </div>
+          </>
         )
       case 'import':
         return (
@@ -315,38 +351,73 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-        <div className="text-2xl font-semibold text-gray-700 dark:text-gray-300">Cargando...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#E8F5F3] via-gray-50 to-[#D1F2EB] relative overflow-hidden">
+        {/* Blur y partículas de fondo */}
+        <div className="absolute inset-0">
+          <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#2563EB]/30 rounded-full blur-3xl opacity-60"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-white/40 rounded-full blur-3xl"></div>
+          <div className="absolute top-1/2 left-1/2 w-[300px] h-[300px] bg-gray-200/50 rounded-full blur-2xl"></div>
+          <div className="absolute top-10 right-10 w-[200px] h-[200px] bg-[#2563EB]/20 rounded-full blur-xl"></div>
+          <div className="absolute inset-0 backdrop-blur-2xl bg-white/5"></div>
+        </div>
+        <div className="relative z-10 text-2xl font-semibold text-gray-700">Cargando...</div>
       </div>
     )
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-        <div className="text-2xl font-semibold text-red-600 dark:text-red-400">No tienes acceso. Por favor inicia sesión.</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#E8F5F3] via-gray-50 to-[#D1F2EB] relative overflow-hidden">
+        {/* Blur y partículas de fondo */}
+        <div className="absolute inset-0">
+          <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#2563EB]/30 rounded-full blur-3xl opacity-60"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-white/40 rounded-full blur-3xl"></div>
+          <div className="absolute top-1/2 left-1/2 w-[300px] h-[300px] bg-gray-200/50 rounded-full blur-2xl"></div>
+          <div className="absolute top-10 right-10 w-[200px] h-[200px] bg-[#2563EB]/20 rounded-full blur-xl"></div>
+          <div className="absolute inset-0 backdrop-blur-2xl bg-white/5"></div>
+        </div>
+        <div className="relative z-10 text-2xl font-semibold text-[#2563EB]">No tienes acceso. Por favor inicia sesión.</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Header 
-        modelAccuracy={95.8}
-        userName={`${user?.first_name} ${user?.last_name}`}
-        userRole="Médico"
-      />
-      <div className="flex">
-        {/* Sidebar */}
-        <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} />
-
-        {/* Main Content */}
-        <main className="flex-1 p-6 overflow-auto">
-          <div className="max-w-7xl mx-auto">
-            {renderContent()}
-          </div>
-        </main>
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#E8F5F3] via-gray-50 to-[#D1F2EB] dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 pt-20">
+      {/* Blur y partículas de fondo */}
+      <div className="absolute inset-0">
+        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#2563EB]/30 rounded-full blur-3xl opacity-60"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-white/40 dark:bg-gray-900/40 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 w-[300px] h-[300px] bg-gray-200/50 dark:bg-gray-800/50 rounded-full blur-2xl"></div>
+        <div className="absolute top-10 right-10 w-[200px] h-[200px] bg-[#2563EB]/20 rounded-full blur-xl"></div>
+        <div className="absolute inset-0 backdrop-blur-2xl bg-white/5 dark:bg-gray-900/5"></div>
       </div>
+      <div className="relative z-10">
+        <Header 
+          modelAccuracy={metrics.model_accuracy}
+          userName={`${user?.first_name} ${user?.last_name}`}
+          userRole="Médico"
+        />
+        <div className="flex">
+          {/* Sidebar */}
+          <Sidebar 
+            activeSection={activeSection} 
+            setActiveSection={setActiveSection}
+            patientsCount={metrics.total_patients}
+            reportsCount={metrics.total_predictions}
+          />
+
+          {/* Main Content */}
+          <main className="flex-1 p-6 overflow-auto">
+            <div className="max-w-7xl mx-auto">
+              {renderContent()}
+            </div>
+          </main>
+        </div>
+      </div>
+      {/* Partículas decorativas */}
+      <div className="absolute top-32 left-16 w-4 h-4 bg-[#2563EB]/40 rounded-full blur-sm animate-pulse"></div>
+      <div className="absolute bottom-40 right-1/4 w-6 h-6 bg-white/50 dark:bg-gray-900/50 rounded-full blur-sm animate-bounce"></div>
+      <div className="absolute top-2/3 left-1/4 w-3 h-3 bg-[#2563EB]/60 rounded-full blur-sm animate-pulse"></div>
     </div>
   )
 } 

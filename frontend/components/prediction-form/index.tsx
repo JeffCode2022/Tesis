@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useMemo } from "react"
 import { User, Heart } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -39,6 +40,22 @@ interface PredictionFormProps {
 export function PredictionForm({ formData, onFormChange, onPredict }: PredictionFormProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+
+  // Cálculo de IMC en tiempo real
+  const imc = useMemo(() => {
+    const peso = parseFloat(formData.peso)
+    const altura = parseFloat(formData.altura)
+    if (!peso || !altura || peso <= 0 || altura <= 0) return null
+    const alturaM = altura / 100
+    return peso / (alturaM * alturaM)
+  }, [formData.peso, formData.altura])
+
+  const getIMCCategory = (imc: number) => {
+    if (imc < 18.5) return { label: "Bajo peso", color: "text-blue-600 dark:text-blue-400" }
+    if (imc < 25) return { label: "Normal", color: "text-green-600 dark:text-green-400" }
+    if (imc < 30) return { label: "Sobrepeso", color: "text-yellow-600 dark:text-yellow-400" }
+    return { label: "Obesidad", color: "text-red-600 dark:text-red-400" }
+  }
 
   const handleInputChange = (field: string, value: string) => {
     onFormChange(field, value)
@@ -277,6 +294,18 @@ export function PredictionForm({ formData, onFormChange, onPredict }: Prediction
                   />
                 </div>
               </div>
+              {/* IMC en tiempo real */}
+              <div className="mt-2">
+                <div className="inline-block px-4 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 shadow text-sm">
+                  <span className="font-semibold text-gray-800 dark:text-white">IMC: </span>
+                  <span className="font-bold text-lg">
+                    {imc ? imc.toFixed(2) : "N/A"}
+                  </span>
+                  {imc && (
+                    <span className={`ml-3 font-semibold ${getIMCCategory(imc).color}`}>{getIMCCategory(imc).label}</span>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Parámetros clínicos */}
@@ -445,7 +474,7 @@ export function PredictionForm({ formData, onFormChange, onPredict }: Prediction
             {error && <p className="text-red-500 text-center">{error}</p>}
             <Button
               type="submit"
-              disabled={!isFormValid() || loading}
+              disabled={loading || !isFormValid()}
               className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg disabled:opacity-50"
               size="lg"
             >
