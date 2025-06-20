@@ -55,7 +55,7 @@ export function CardioBot({ messages, onSendMessage }: CardioBotProps) {
       )}
 
       {showBot && (
-        <Card className="w-96 h-[500px] shadow-2xl border-0 bg-white">
+        <Card className="w-96 h-[500px] shadow-2xl border-0 bg-white dark:bg-gray-900">
           <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -66,7 +66,7 @@ export function CardioBot({ messages, onSendMessage }: CardioBotProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowBot(false)}
-                className="text-white hover:bg-white/20"
+                className="text-white hover:bg-white/20 dark:hover:bg-gray-900/20"
               >
                 <X className="h-4 w-4" />
               </Button>

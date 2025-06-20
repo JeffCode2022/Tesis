@@ -1,7 +1,7 @@
 "use client"
 
-import { Users, Activity, AlertTriangle, Database, TrendingUp, Zap, Shield, FileText, ArrowUpRight, ArrowDownRight } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Users, Activity, TrendingUp, Shield, ArrowUpRight, ArrowDownRight, BarChart3 } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
@@ -33,105 +33,128 @@ export function MetricsCards({ data, className, onMetricClick }: MetricsCardsPro
 
   const metrics = [
     {
-      title: "Total Pacientes",
+      title: "Pacientes Hoy",
       value: data.total_patients.toLocaleString(),
       icon: Users,
-      gradient: "from-blue-600 to-blue-700",
+      iconColor: "text-white",
+      iconBg: "bg-[#4ECDC4]",
       trend: calculateGrowth(data.total_patients, data.previous_month_patients),
-      trendIcon: data.previous_month_patients ? 
-        (data.total_patients > data.previous_month_patients ? ArrowUpRight : ArrowDownRight) : 
-        TrendingUp,
-      trendColor: data.previous_month_patients ? 
-        (data.total_patients > data.previous_month_patients ? "text-green-300" : "text-red-300") : 
-        "text-green-300",
+      trendIcon: data.previous_month_patients
+        ? data.total_patients > data.previous_month_patients
+          ? ArrowUpRight
+          : ArrowDownRight
+        : TrendingUp,
+      trendColor: data.previous_month_patients
+        ? data.total_patients > data.previous_month_patients
+          ? "text-green-600"
+          : "text-red-500"
+        : "text-green-600",
+      trendText: "vs ayer",
       tooltip: "Número total de pacientes registrados en el sistema",
-      onClick: () => onMetricClick?.('patients'),
+      onClick: () => onMetricClick?.("patients"),
     },
     {
-      title: "Predicciones IA",
-      value: data.total_predictions.toString(),
-      icon: Activity,
-      gradient: "from-emerald-600 to-emerald-700",
-      trend: calculateGrowth(data.total_predictions, data.previous_month_predictions),
-      trendIcon: data.previous_month_predictions ? 
-        (data.total_predictions > data.previous_month_predictions ? ArrowUpRight : ArrowDownRight) : 
-        Zap,
-      trendColor: data.previous_month_predictions ? 
-        (data.total_predictions > data.previous_month_predictions ? "text-green-300" : "text-red-300") : 
-        "text-yellow-300",
-      tooltip: "Total de predicciones realizadas por el modelo de IA",
-    },
-    {
-      title: "Alto Riesgo",
+      title: "Riesgo Alto",
       value: data.high_risk_count.toString(),
-      icon: AlertTriangle,
-      gradient: "from-orange-500 to-red-600",
+      icon: Activity,
+      iconColor: "text-white",
+      iconBg: "bg-red-500",
       trend: calculateGrowth(data.high_risk_count, data.previous_month_high_risk),
-      trendIcon: data.previous_month_high_risk ? 
-        (data.high_risk_count > data.previous_month_high_risk ? ArrowUpRight : ArrowDownRight) : 
-        Shield,
-      trendColor: data.previous_month_high_risk ? 
-        (data.high_risk_count > data.previous_month_high_risk ? "text-red-300" : "text-green-300") : 
-        "text-orange-200",
+      trendIcon: data.previous_month_high_risk
+        ? data.high_risk_count > data.previous_month_high_risk
+          ? ArrowUpRight
+          : ArrowDownRight
+        : Shield,
+      trendColor: data.previous_month_high_risk
+        ? data.high_risk_count > data.previous_month_high_risk
+          ? "text-red-500"
+          : "text-green-600"
+        : "text-red-500",
+      trendText: "nuevos casos",
       tooltip: "Pacientes identificados con alto riesgo cardiovascular",
     },
     {
-      title: "Crecimiento Mensual",
+      title: "Precisión IA",
       value: `${data.monthly_growth}%`,
-      icon: Database,
-      gradient: "from-purple-600 to-indigo-700",
+      icon: BarChart3,
+      iconColor: "text-white",
+      iconBg: "bg-green-500",
       trend: calculateGrowth(data.monthly_growth, data.previous_month_growth),
-      trendIcon: data.previous_month_growth ? 
-        (data.monthly_growth > data.previous_month_growth ? ArrowUpRight : ArrowDownRight) : 
-        FileText,
-      trendColor: data.previous_month_growth ? 
-        (data.monthly_growth > data.previous_month_growth ? "text-green-300" : "text-red-300") : 
-        "text-green-300",
-      tooltip: "Tasa de crecimiento mensual de pacientes",
+      trendIcon: data.previous_month_growth
+        ? data.monthly_growth > data.previous_month_growth
+          ? ArrowUpRight
+          : ArrowDownRight
+        : TrendingUp,
+      trendColor: data.previous_month_growth
+        ? data.monthly_growth > data.previous_month_growth
+          ? "text-green-600"
+          : "text-red-500"
+        : "text-green-600",
+      trendText: "esta semana",
+      tooltip: "Precisión del modelo de IA en las predicciones",
     },
   ]
 
   return (
-    <TooltipProvider>
-      <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8", className)}>
-      {metrics.map((metric, index) => {
-        const IconComponent = metric.icon
-        const TrendIcon = metric.trendIcon
+    <div className="relative min-h-[200px] bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border border-white/30 dark:border-gray-700 p-6 rounded-2xl shadow-2xl">
+      {/* Background blur elements for glassmorphism */}
+      <div className="absolute inset-0 overflow-hidden rounded-2xl">
+        <div className="absolute top-1/4 left-1/4 w-[200px] h-[200px] bg-[#4ECDC4]/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-[150px] h-[150px] bg-blue-200/20 rounded-full blur-2xl"></div>
+        <div className="absolute top-1/2 right-1/3 w-[100px] h-[100px] bg-green-200/15 rounded-full blur-xl"></div>
+      </div>
 
-        return (
-            <Tooltip key={index}>
-              <TooltipTrigger asChild>
-          <Card
-            className={`bg-gradient-to-br ${metric.gradient} text-white border-0 shadow-xl hover:shadow-2xl transition-all duration-300 ${metric.onClick ? "cursor-pointer hover:scale-105" : ""}`}
-            onClick={metric.onClick}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium opacity-90">{metric.title}</CardTitle>
-              <IconComponent className="h-5 w-5 opacity-80" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{metric.value}</div>
-              <div className="flex items-center gap-2 mt-2">
-                <TrendIcon className={`h-4 w-4 ${metric.trendColor}`} />
-                      <p className="text-xs opacity-90">
-                        {metric.trend !== 0 && (
-                          <span className={metric.trendColor}>
-                            {metric.trend > 0 ? '+' : ''}{metric.trend.toFixed(1)}%
-                          </span>
-                        )}
-                        {metric.trend === 0 && "Sin cambios"}
-                      </p>
-              </div>
-            </CardContent>
-          </Card>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{metric.tooltip}</p>
-              </TooltipContent>
-            </Tooltip>
-        )
-      })}
+      <TooltipProvider>
+        <div className={cn("relative z-10 grid grid-cols-1 md:grid-cols-3 gap-4", className)}>
+          {metrics.map((metric, index) => {
+            const IconComponent = metric.icon
+
+            return (
+              <Tooltip key={index}>
+                <TooltipTrigger asChild>
+                  <Card
+                    className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.02] hover:-translate-y-1"
+                    onClick={metric.onClick}
+                  >
+                    {/* Subtle inner glow */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/40 dark:from-gray-900/40 to-white/10 dark:to-gray-900/10 pointer-events-none" />
+
+                    <CardContent className="p-6 relative z-10">
+                      {/* Header with icon and title */}
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className={`${metric.iconBg} p-2.5 rounded-full shadow-sm`}>
+                          <IconComponent className={`h-5 w-5 ${metric.iconColor}`} />
+                        </div>
+                        <h3 className="text-sm font-medium text-gray-800 dark:text-white">{metric.title}</h3>
+                      </div>
+
+                      {/* Main value */}
+                      <div className="text-3xl font-bold text-gray-900 dark:text-white mb-3">{metric.value}</div>
+
+                      {/* Trend indicator */}
+                      <div className="flex items-center gap-1">
+                        <span className={`text-sm font-semibold ${metric.trendColor}`}>
+                          {metric.trend !== 0 && (
+                            <>
+                              {metric.trend > 0 ? "+" : ""}
+                              {Math.abs(metric.trend).toFixed(0)}
+                            </>
+                          )}
+                          {metric.trend === 0 && "Sin cambios"}
+                        </span>
+                        <span className="text-sm text-gray-600 ml-1 dark:text-gray-400">{metric.trendText}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{metric.tooltip}</p>
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </div>
+      </TooltipProvider>
     </div>
-    </TooltipProvider>
   )
 }

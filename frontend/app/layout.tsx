@@ -2,7 +2,7 @@
 
 import { Inter } from "next/font/google"
 import "./globals.css"
-// import { ThemeProvider } from "@/components/theme-provider" // Desactivado temporalmente
+import { ThemeProvider } from "@/components/theme-provider"
 import { useAuth } from "@/hooks/useAuth"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect } from "react"
@@ -44,15 +44,14 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={inter.className}>
-        {/* <ThemeProvider
+        <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
           {children}
-        </ThemeProvider> */}
-        {children} {/* Renderizar children directamente */}
+        </ThemeProvider>
       </body>
     </html>
   )
