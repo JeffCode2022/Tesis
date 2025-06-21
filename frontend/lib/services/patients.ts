@@ -59,13 +59,49 @@ export interface PaginatedPatientsResponse {
 }
 
 export const patientService = {
-  async getPatients(): Promise<Patient[]> {
+  async getPatients(page: number = 1, pageSize: number = 50, search?: string): Promise<{ patients: Patient[], total: number, totalPages: number }> {
     try {
-      const response = await api.get<PaginatedPatientsResponse>('/api/patients/');
-      return response.data.results || [];
+      let url = `/api/patients/?page=${page}&page_size=${pageSize}`
+      if (search) {
+        url += `&search=${encodeURIComponent(search)}`
+      }
+      
+      const response = await api.get<PaginatedPatientsResponse>(url)
+      const patients = response.data.results || []
+      const total = response.data.count || 0
+      const totalPages = Math.ceil(total / pageSize)
+      
+      console.log(`[patientService] Página ${page}: ${patients.length} pacientes de ${total} totales`)
+      return { patients, total, totalPages }
     } catch (error) {
-      console.error('Error obteniendo pacientes:', error);
-      throw error instanceof Error ? error : new Error('Error al obtener la lista de pacientes');
+      console.error('Error obteniendo pacientes:', error)
+      throw error instanceof Error ? error : new Error('Error al obtener la lista de pacientes')
+    }
+  },
+
+  // Método para obtener todos los pacientes en una sola petición
+  async getAllPatients(): Promise<Patient[]> {
+    try {
+      // Usar el nuevo parámetro que deshabilita la paginación en el backend
+      const response = await api.get<Patient[]>('/api/patients/?no_pagination=true');
+      const allPatients = response.data || [];
+      
+      console.log(`[patientService] Obtenidos ${allPatients.length} pacientes totales en una sola petición.`);
+      return allPatients;
+    } catch (error) {
+      console.error('Error obteniendo todos los pacientes:', error);
+      throw error instanceof Error ? error : new Error('Error al obtener la lista completa de pacientes');
+    }
+  },
+
+  async getAllPatientsForPrediction(): Promise<any[]> {
+    try {
+      const response = await api.get<any[]>('/api/patients/for-prediction/');
+      console.log(`[patientService] Obtenidos ${response.data.length} pacientes listos para predicción.`);
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo pacientes para predicción:', error);
+      throw error instanceof Error ? error : new Error('Error al preparar los datos para la predicción masiva');
     }
   },
 
@@ -143,15 +179,17 @@ export const patientService = {
 
   async createOrUpdate(data: Omit<Patient, 'id' | 'created_at' | 'updated_at' | 'riesgo'>): Promise<Patient> {
     try {
-      const patients = await this.getPatients();
-      const existingPatient = patients.find(p => 
-        p.dni && data.dni &&
-        p.dni.toLowerCase() === data.dni.toLowerCase()
-      );
-
-      if (existingPatient) {
-        return await this.updatePatient(existingPatient.id, data);
+      // Usar getPatientByDni para ser más eficiente
+      const existingPatients = await this.getPatientByDni(data.dni);
+      
+      if (existingPatients.length > 0) {
+        // Actualizar el primer paciente encontrado con ese DNI
+        const patientToUpdate = existingPatients[0];
+        console.log(`[createOrUpdate] Paciente existente encontrado con DNI ${data.dni}. Actualizando ID: ${patientToUpdate.id}`);
+        return await this.updatePatient(patientToUpdate.id, data);
       } else {
+        // Si no existe, crear uno nuevo
+        console.log(`[createOrUpdate] No se encontró paciente con DNI ${data.dni}. Creando nuevo paciente.`);
         return await this.createPatient(data);
       }
     } catch (error) {

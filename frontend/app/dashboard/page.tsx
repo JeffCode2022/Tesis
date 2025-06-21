@@ -126,27 +126,17 @@ export default function Dashboard() {
   // Cargar datos iniciales
   useEffect(() => {
     const loadData = async () => {
+      if (!isAuthenticated) return;
       try {
-        const [patientsData, metricsData] = await Promise.all([
-          patientService.getPatients(),
-          analyticsService.getDashboardMetrics()
-        ])
-        if (Array.isArray(patientsData)) {
-          setPatients(patientsData)
-        } else {
-          console.error('API returned non-array data for patients:', patientsData)
-          setPatients([]) // Fallback to empty array to prevent errors
-        }
-        setMetrics(metricsData)
+        // Cargar solo las métricas, los pacientes se cargan en su propia vista
+        const metricsData = await analyticsService.getDashboardMetrics();
+        setMetrics(metricsData);
       } catch (error) {
-        console.error('Error loading data:', error)
+        console.error('Error loading dashboard data:', error);
       }
-    }
-
-    if (isAuthenticated) {
-      loadData()
-    }
-  }, [isAuthenticated])
+    };
+    loadData();
+  }, [isAuthenticated]);
 
   // Manejadores de eventos
   const handleFormChange = (field: string, value: string) => {

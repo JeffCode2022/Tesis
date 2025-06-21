@@ -1,0 +1,11 @@
+nombre,apellidos,dni,edad,sexo,peso,altura,presionSistolica,presionDiastolica,colesterol,glucosa,cigarrillosDia,anosTabaquismo,actividadFisica,antecedentesCardiacos,numero_historia
+Juan,Pérez,12345678,45,M,75,170,140,90,220,110,0,0,sedentario,no,HC001
+María,García,23456789,38,F,62,165,120,80,180,95,0,0,moderado,si,HC002
+Carlos,Rodríguez,34567890,52,M,85,175,160,100,250,130,10,15,sedentario,no,HC003
+Ana,López,45678901,41,F,68,160,130,85,200,105,0,0,ligero,si,HC004
+Luis,Martínez,56789012,58,M,90,180,170,110,280,140,20,25,sedentario,si,HC005
+Carmen,Sánchez,67890123,35,F,55,155,115,75,170,90,0,0,intenso,no,HC006
+Roberto,Fernández,78901234,49,M,78,172,145,95,230,115,5,8,moderado,no,HC007
+Isabel,Torres,89012345,44,F,65,168,125,82,190,100,0,0,ligero,si,HC008
+Miguel,Ramírez,90123456,61,M,88,178,175,105,260,135,15,20,sedentario,si,HC009
+Laura,Jiménez,01234567,39,F,60,162,118,78,175,92,0,0,moderado,no,HC010 

@@ -3,10 +3,18 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+<<<<<<< HEAD
+from django.db.models import Subquery, OuterRef
+from .models import Patient, MedicalRecord
+from .serializers import (
+    PatientSerializer, PatientCreateSerializer, PatientListSerializer,
+    MedicalRecordSerializer, PatientDNISearchSerializer, PatientForPredictionSerializer
+=======
 from .models import Patient, MedicalRecord
 from .serializers import (
     PatientSerializer, PatientCreateSerializer, PatientListSerializer,
     MedicalRecordSerializer, PatientDNISearchSerializer
+>>>>>>> f5cbcea3f3cda2b84fd018f94a310197f333dfad
 )
 
 class PatientViewSet(viewsets.ModelViewSet):
@@ -18,6 +26,18 @@ class PatientViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'edad', 'nombre']
     ordering = ['-created_at']
 
+<<<<<<< HEAD
+    @property
+    def paginator(self):
+        """
+        Desactiva la paginación si se pasa el parámetro 'no_pagination=true'.
+        """
+        if self.request.query_params.get('no_pagination', '').lower() == 'true':
+            return None
+        return super().paginator
+
+=======
+>>>>>>> f5cbcea3f3cda2b84fd018f94a310197f333dfad
     def get_serializer_class(self):
         if self.action == 'list':
             return PatientListSerializer
@@ -28,6 +48,33 @@ class PatientViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(medico_tratante=self.request.user)
 
+<<<<<<< HEAD
+    @action(detail=False, methods=['get'], url_path='for-prediction')
+    def for_prediction(self, request):
+        """
+        Endpoint optimizado que devuelve todos los pacientes con los datos de su último
+        registro médico, listo para la predicción masiva. No utiliza paginación.
+        """
+        latest_record_subquery = MedicalRecord.objects.filter(
+            patient=OuterRef('pk')
+        ).order_by('-fecha_registro')
+
+        patient_queryset = self.get_queryset().annotate(
+            latest_sistolica=Subquery(latest_record_subquery.values('presion_sistolica')[:1]),
+            latest_diastolica=Subquery(latest_record_subquery.values('presion_diastolica')[:1]),
+            latest_colesterol=Subquery(latest_record_subquery.values('colesterol')[:1]),
+            latest_glucosa=Subquery(latest_record_subquery.values('glucosa')[:1]),
+            latest_cigarrillos=Subquery(latest_record_subquery.values('cigarrillos_dia')[:1]),
+            latest_tabaquismo=Subquery(latest_record_subquery.values('anos_tabaquismo')[:1]),
+            latest_actividad=Subquery(latest_record_subquery.values('actividad_fisica')[:1]),
+            latest_antecedentes=Subquery(latest_record_subquery.values('antecedentes_cardiacos')[:1]),
+        ).filter(latest_sistolica__isnull=False) # Solo pacientes con al menos un registro médico
+
+        serializer = PatientForPredictionSerializer(patient_queryset, many=True)
+        return Response(serializer.data)
+
+=======
+>>>>>>> f5cbcea3f3cda2b84fd018f94a310197f333dfad
     @action(detail=False, methods=['post'])
     def search_by_dni(self, request):
         serializer = PatientDNISearchSerializer(data=request.data)
