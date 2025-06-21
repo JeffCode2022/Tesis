@@ -3,11 +3,18 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+<<<<<<< HEAD
 from django.db.models import Subquery, OuterRef
 from .models import Patient, MedicalRecord
 from .serializers import (
     PatientSerializer, PatientCreateSerializer, PatientListSerializer,
     MedicalRecordSerializer, PatientDNISearchSerializer, PatientForPredictionSerializer
+=======
+from .models import Patient, MedicalRecord
+from .serializers import (
+    PatientSerializer, PatientCreateSerializer, PatientListSerializer,
+    MedicalRecordSerializer, PatientDNISearchSerializer
+>>>>>>> f5cbcea3f3cda2b84fd018f94a310197f333dfad
 )
 
 class PatientViewSet(viewsets.ModelViewSet):
@@ -19,6 +26,7 @@ class PatientViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'edad', 'nombre']
     ordering = ['-created_at']
 
+<<<<<<< HEAD
     @property
     def paginator(self):
         """
@@ -28,6 +36,8 @@ class PatientViewSet(viewsets.ModelViewSet):
             return None
         return super().paginator
 
+=======
+>>>>>>> f5cbcea3f3cda2b84fd018f94a310197f333dfad
     def get_serializer_class(self):
         if self.action == 'list':
             return PatientListSerializer
@@ -38,6 +48,7 @@ class PatientViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(medico_tratante=self.request.user)
 
+<<<<<<< HEAD
     @action(detail=False, methods=['get'], url_path='for-prediction')
     def for_prediction(self, request):
         """
@@ -62,6 +73,8 @@ class PatientViewSet(viewsets.ModelViewSet):
         serializer = PatientForPredictionSerializer(patient_queryset, many=True)
         return Response(serializer.data)
 
+=======
+>>>>>>> f5cbcea3f3cda2b84fd018f94a310197f333dfad
     @action(detail=False, methods=['post'])
     def search_by_dni(self, request):
         serializer = PatientDNISearchSerializer(data=request.data)

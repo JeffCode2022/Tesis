@@ -161,6 +161,7 @@ class PatientDNISearchSerializer(serializers.Serializer):
             }
         except Exception as e:
             raise serializers.ValidationError(f"Error al obtener datos externos: {str(e)}")
+<<<<<<< HEAD
 
 # Serializador optimizado para la predicción masiva
 class PatientForPredictionSerializer(serializers.ModelSerializer):
@@ -186,3 +187,5 @@ class PatientForPredictionSerializer(serializers.ModelSerializer):
             'presionSistolica', 'presionDiastolica', 'colesterol', 'glucosa',
             'cigarrillosDia', 'anosTabaquismo', 'actividadFisica', 'antecedentesCardiacos'
         ]
+=======
+>>>>>>> f5cbcea3f3cda2b84fd018f94a310197f333dfad
