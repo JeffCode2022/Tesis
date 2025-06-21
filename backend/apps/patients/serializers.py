@@ -161,3 +161,28 @@ class PatientDNISearchSerializer(serializers.Serializer):
             }
         except Exception as e:
             raise serializers.ValidationError(f"Error al obtener datos externos: {str(e)}")
+
+# Serializador optimizado para la predicción masiva
+class PatientForPredictionSerializer(serializers.ModelSerializer):
+    """
+    Serializador ligero que incluye los campos necesarios del paciente y los datos
+    del último registro médico, obtenidos a través de anotaciones en la consulta.
+    """
+    presionSistolica = serializers.IntegerField(source='latest_sistolica', default=0)
+    presionDiastolica = serializers.IntegerField(source='latest_diastolica', default=0)
+    colesterol = serializers.FloatField(source='latest_colesterol', default=0.0)
+    glucosa = serializers.FloatField(source='latest_glucosa', default=0.0)
+    cigarrillosDia = serializers.IntegerField(source='latest_cigarrillos', default=0)
+    anosTabaquismo = serializers.IntegerField(source='latest_tabaquismo', default=0)
+    actividadFisica = serializers.CharField(source='latest_actividad', default='sedentario')
+    antecedentesCardiacos = serializers.CharField(source='latest_antecedentes', default='no')
+    
+    class Meta:
+        model = Patient
+        fields = [
+            'nombre', 'apellidos', 'dni', 'edad', 'sexo', 'peso', 'altura',
+            'numero_historia',
+            # Campos anotados desde el último registro médico
+            'presionSistolica', 'presionDiastolica', 'colesterol', 'glucosa',
+            'cigarrillosDia', 'anosTabaquismo', 'actividadFisica', 'antecedentesCardiacos'
+        ]

@@ -8,7 +8,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { PatientDetailsModal } from "@/components/patient-details-modal"
 import { patientService, type Patient } from "@/lib/services/patients"
 import { predictionService } from "@/lib/services/predictions"
-import { User, Heart, Activity, Calendar, Eye, Users } from "lucide-react"
+import { User, Heart, Activity, Calendar, Eye, Users, ChevronLeft, ChevronRight, Search, Filter, RefreshCw } from "lucide-react"
+import { Input } from "@/components/ui/input"
 
 interface PatientsListProps {
   importedPatients?: any[]
@@ -31,6 +32,9 @@ function LoadingState() {
           </div>
           <span className="text-xl font-semibold text-gray-800">Cargando pacientes...</span>
           <p className="text-gray-600 mt-2">Obteniendo datos del sistema CardioPredict</p>
+          <div className="mt-4 text-sm text-gray-500">
+            <div className="animate-pulse">Cargando página actual...</div>
+          </div>
         </div>
       </div>
     </div>
@@ -51,17 +55,53 @@ function EmptyState() {
 }
 
 // Encabezado de la lista
-function PatientsListHeader({ count }: { count: number }) {
+function PatientsListHeader({ count, searchTerm, onSearchChange, onReload }: { 
+  count: number; 
+  searchTerm: string; 
+  onSearchChange: (value: string) => void;
+  onReload: () => void;
+}) {
   return (
     <CardHeader className="bg-[#2563EB]/90 dark:bg-[#2563EB]/80 backdrop-blur-xl rounded-t-3xl text-white shadow-lg p-6">
-      <div className="flex items-center gap-2 mb-1">
-        <div className="w-8 h-8 bg-[#2563EB]/30 backdrop-blur-sm rounded-full flex items-center justify-center">
-          <Users className="w-4 h-4 text-white" />
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-[#2563EB]/30 backdrop-blur-sm rounded-full flex items-center justify-center">
+            <Users className="w-4 h-4 text-white" />
+          </div>
+          <CardTitle className="text-2xl font-bold drop-shadow">Historial de Pacientes</CardTitle>
         </div>
-        <CardTitle className="text-2xl font-bold drop-shadow">Historial de Pacientes</CardTitle>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="Buscar pacientes..."
+              value={searchTerm}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="pl-10 pr-4 py-2 bg-white/20 backdrop-blur-sm border-white/30 text-white placeholder-white/70 rounded-xl w-64"
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-white/30 text-white bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl"
+          >
+            <Filter className="w-4 h-4 mr-2" />
+            Filtros
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={onReload}
+            className="border-white/30 text-white bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Recargar
+          </Button>
+        </div>
       </div>
       <CardDescription className="text-white/90 text-base drop-shadow">
-        Registro completo de evaluaciones realizadas ({count} pacientes)
+        Registro completo de evaluaciones realizadas ({count.toLocaleString()} pacientes)
       </CardDescription>
     </CardHeader>
   )
@@ -165,43 +205,172 @@ function PatientCard({ paciente, onViewDetails, getRiskColor, formatDate }: any)
   )
 }
 
+// Nuevo estado de carga para el contenido interno
+function ContentLoadingState() {
+  return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="text-center text-gray-500 dark:text-gray-400">
+        <div className="w-12 h-12 bg-[#2563EB]/20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto animate-pulse">
+          <Heart className="w-6 h-6 text-[#2563EB]" />
+        </div>
+        <span className="text-lg font-semibold text-gray-700 dark:text-gray-200">Actualizando...</span>
+        <p className="text-sm">Cargando nuevos datos de pacientes.</p>
+      </div>
+    </div>
+  );
+}
+
+// Componente de paginación
+function Pagination({ currentPage, totalPages, onPageChange }: { currentPage: number; totalPages: number; onPageChange: (page: number) => void }) {
+  const pages = []
+  const maxVisiblePages = 5
+  
+  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
+  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+  
+  if (endPage - startPage + 1 < maxVisiblePages) {
+    startPage = Math.max(1, endPage - maxVisiblePages + 1)
+  }
+  
+  for (let i = startPage; i <= endPage; i++) {
+    pages.push(i)
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-2 mt-6">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="border-[#2563EB]/30 text-[#2563EB] hover:bg-[#2563EB]/10"
+      >
+        <ChevronLeft className="w-4 h-4" />
+        Anterior
+      </Button>
+      
+      {startPage > 1 && (
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(1)}
+            className="border-[#2563EB]/30 text-[#2563EB] hover:bg-[#2563EB]/10"
+          >
+            1
+          </Button>
+          {startPage > 2 && <span className="text-gray-500">...</span>}
+        </>
+      )}
+      
+      {pages.map((page) => (
+        <Button
+          key={page}
+          variant={page === currentPage ? "default" : "outline"}
+          size="sm"
+          onClick={() => onPageChange(page)}
+          className={page === currentPage 
+            ? "bg-[#2563EB] text-white" 
+            : "border-[#2563EB]/30 text-[#2563EB] hover:bg-[#2563EB]/10"
+          }
+        >
+          {page}
+        </Button>
+      ))}
+      
+      {endPage < totalPages && (
+        <>
+          {endPage < totalPages - 1 && <span className="text-gray-500">...</span>}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(totalPages)}
+            className="border-[#2563EB]/30 text-[#2563EB] hover:bg-[#2563EB]/10"
+          >
+            {totalPages}
+          </Button>
+        </>
+      )}
+      
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="border-[#2563EB]/30 text-[#2563EB] hover:bg-[#2563EB]/10"
+      >
+        Siguiente
+        <ChevronRight className="w-4 h-4" />
+      </Button>
+    </div>
+  )
+}
+
 export function PatientsList({ importedPatients = [], onError }: PatientsListProps) {
   const [patients, setPatients] = useState<Patient[]>([])
   const [loading, setLoading] = useState(true)
+  const [isInitialLoad, setIsInitialLoad] = useState(true) // Nuevo estado para la carga inicial
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalPatients, setTotalPatients] = useState(0)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [patientsPerPage] = useState(50)
 
+  // Cargar pacientes de la página actual
   useEffect(() => {
     const fetchPatients = async () => {
+      setLoading(true)
+      console.log(`[PatientsList] Cargando página ${currentPage} con búsqueda: "${searchTerm}"`)
+      
       try {
-        const data = await patientService.getPatients()
-        const patientsWithPredictions = await Promise.all(
-          data.map(async (patient) => {
-            const latestPrediction = await predictionService.getLatestPredictionForPatient(patient.id)
-            return {
-              ...patient,
-              probabilidad: latestPrediction?.probabilidad || undefined,
-              riesgo_actual: latestPrediction?.riesgo || patient.riesgo_actual,
-            }
-          })
+        const { patients: pagePatients, total, totalPages: pages } = await patientService.getPatients(
+          currentPage, 
+          patientsPerPage, 
+          searchTerm || undefined
         )
-        setPatients(patientsWithPredictions)
-        console.log("[PatientsList] Pacientes recibidos de la API con predicciones:", patientsWithPredictions)
+        
+        console.log(`[PatientsList] Página ${currentPage}: ${pagePatients.length} pacientes de ${total} totales`)
+        
+        setPatients(pagePatients)
+        setTotalPatients(total)
+        setTotalPages(pages)
+        
       } catch (error) {
+        console.error('[PatientsList] Error cargando pacientes:', error)
         setPatients([])
         onError?.(error instanceof Error ? error.message : "Error al cargar los pacientes")
       } finally {
         setLoading(false)
+        if (isInitialLoad) {
+          setIsInitialLoad(false)
+        }
       }
     }
     fetchPatients()
-  }, [onError])
+  }, [currentPage, searchTerm, patientsPerPage, onError, isInitialLoad])
 
   const allPatients = [...patients, ...(importedPatients || []).slice(0, 5)]
 
   const handleViewDetails = (patient: Patient) => {
     setSelectedPatient(patient)
     setIsModalOpen(true)
+  }
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    setCurrentPage(1) // Resetear a la primera página cuando se busca
+  }
+
+  const handleReload = () => {
+    setCurrentPage(1)
+    setSearchTerm("")
   }
 
   const getRiskColor = (riesgo: string | null) => {
@@ -227,41 +396,72 @@ export function PatientsList({ importedPatients = [], onError }: PatientsListPro
     }
   }
 
-  if (loading) return <LoadingState />
+  if (isInitialLoad) return <LoadingState />
 
   return (
-    <div className="relative">
+    <div className="relative min-h-screen">
       {/* Glassmorphism background */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-[#2563EB]/15 rounded-full blur-3xl opacity-60"></div>
         <div className="absolute bottom-1/4 right-1/4 w-[200px] h-[200px] bg-white/20 dark:bg-gray-900/20 rounded-full blur-2xl"></div>
         <div className="absolute top-1/2 left-1/2 w-[200px] h-[200px] bg-gray-200/30 rounded-full blur-xl"></div>
       </div>
-      <div className="relative z-10 flex justify-center">
-        <div className="w-full max-w-4xl px-4">
-          <Card className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl shadow-2xl border border-white/30 dark:border-gray-700 rounded-3xl overflow-hidden max-h-[70vh] flex flex-col">
+      
+      <div className="relative z-10 flex justify-center min-h-screen">
+        <div className="w-full max-w-7xl px-4 py-6">
+          <Card className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl shadow-2xl border border-white/30 dark:border-gray-700 rounded-3xl overflow-hidden min-h-[calc(100vh-3rem)] flex flex-col">
             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
-            <PatientsListHeader count={allPatients.length} />
+            <PatientsListHeader 
+              count={totalPatients} 
+              searchTerm={searchTerm}
+              onSearchChange={handleSearchChange}
+              onReload={handleReload}
+            />
             <CardContent className="relative z-10 p-8 flex-1 overflow-y-auto">
-              <div className="space-y-4">
-                {allPatients.length === 0 ? (
-                  <EmptyState />
-                ) : (
-                  allPatients.map((paciente, index) => (
-                    <PatientCard
-                      key={index}
-                      paciente={paciente}
-                      onViewDetails={handleViewDetails}
-                      getRiskColor={getRiskColor}
-                      formatDate={formatDate}
-                    />
-                  ))
-                )}
-              </div>
+              {loading ? (
+                <ContentLoadingState />
+              ) : (
+                <div className="space-y-4">
+                  {allPatients.length === 0 ? (
+                    <EmptyState />
+                  ) : (
+                    <>
+                      <div className="grid gap-4">
+                        {allPatients.map((paciente, index) => (
+                          <PatientCard
+                            key={`${paciente.id || index}-${currentPage}-${searchTerm}`}
+                            paciente={paciente}
+                            onViewDetails={handleViewDetails}
+                            getRiskColor={getRiskColor}
+                            formatDate={formatDate}
+                          />
+                        ))}
+                      </div>
+                      
+                      {totalPages > 1 && (
+                        <Pagination
+                          currentPage={currentPage}
+                          totalPages={totalPages}
+                          onPageChange={handlePageChange}
+                        />
+                      )}
+                      
+                      <div className="text-center text-sm text-gray-500 mt-4">
+                        {searchTerm ? (
+                          `Mostrando página ${currentPage} de ${totalPages} - ${totalPatients.toLocaleString()} pacientes encontrados`
+                        ) : (
+                          `Mostrando página ${currentPage} de ${totalPages} - ${totalPatients.toLocaleString()} pacientes totales`
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
+      
       <PatientDetailsModal
         patient={selectedPatient}
         isOpen={isModalOpen}

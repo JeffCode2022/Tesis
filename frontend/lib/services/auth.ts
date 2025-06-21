@@ -227,7 +227,7 @@ export const authService = {
 
   async register(data: RegisterData): Promise<AuthResponse> {
     try {
-      const response = await api.post<AuthResponse>("/api/register/", data)
+      const response = await api.post<AuthResponse>("/api/authentication/register/", data)
       
       // Validar la respuesta antes de guardar
       if (!response.data.user || !isValidUser(response.data.user)) {
@@ -279,7 +279,7 @@ export const authService = {
         throw new AuthError("No hay token de actualización disponible", "SESSION_EXPIRED")
       }
 
-      const response = await api.post<{ access: string }>("/api/token/refresh/", {
+      const response = await api.post<{ access: string }>("/api/authentication/token/refresh/", {
         refresh: refreshToken
       })
       
