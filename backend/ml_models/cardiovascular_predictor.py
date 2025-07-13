@@ -102,9 +102,17 @@ class CardiovascularPredictor:
         antecedentes_mapping = {'si': 1, 'no': 0, 'desconoce': 0.5}
         antecedentes_encoded = antecedentes_mapping.get(medical_record.antecedentes_cardiacos, 0)
         
+        # Calcular edad desde fecha de nacimiento
+        from datetime import date
+        if patient.fecha_nacimiento:
+            today = date.today()
+            age = today.year - patient.fecha_nacimiento.year - ((today.month, today.day) < (patient.fecha_nacimiento.month, patient.fecha_nacimiento.day))
+        else:
+            age = 0
+        
         features = {
             # Variables demográficas
-            'edad': patient.edad,
+            'edad': age,
             'sexo_encoded': sexo_encoded,
             
             # Antropometría

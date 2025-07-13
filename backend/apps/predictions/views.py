@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+import datetime
 from rest_framework.permissions import IsAuthenticated
 from django.core.cache import cache
 from django.conf import settings
@@ -51,70 +52,155 @@ class PredictionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def predict(self, request):
-        """Realiza una predicción en tiempo real"""
+        """
+        Recibe datos completos de paciente y registro médico, busca o crea/actualiza Patient,
+        crea MedicalRecord, crea MedicalData y luego genera la predicción, devolviendo el resultado.
+        """
+        from apps.medical_data.models import MedicalData
+        from django.utils import timezone
+
         try:
-            patient_id = request.data.get('patient_id')
-            medical_record_id = request.data.get('medical_record_id')
+            data = request.data
 
-            if not patient_id or not medical_record_id:
-                return Response(
-                    {'error': 'Se requieren patient_id y medical_record_id'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            # --- 0. Procesar y validar datos de entrada ---
+            fecha_nacimiento_str = data.get('fecha_nacimiento')
+            fecha_nacimiento_obj = None
+            if fecha_nacimiento_str:
+                try:
+                    fecha_nacimiento_obj = datetime.datetime.strptime(fecha_nacimiento_str, '%Y-%m-%d').date()
+                except ValueError:
+                    return Response({'error': 'El formato de fecha_nacimiento es inválido. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            try:
-                patient = Patient.objects.get(id=patient_id)
-            except Patient.DoesNotExist:
-                return Response(
-                    {'error': 'Paciente no encontrado'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
+            # --- 1. Buscar o crear/actualizar paciente ---
+            dni = data.get('dni')
+            numero_historia = data.get('numero_historia')
+            # Validar identificador mínimo
+            if not dni and not numero_historia:
+                return Response({'error': 'Se requiere al menos el DNI o el número de historia para identificar al paciente.'}, status=status.HTTP_400_BAD_REQUEST)
+            # Buscar paciente existente y validar duplicados
+            if dni:
+                pacientes = Patient.objects.filter(dni=dni)
+            else:
+                pacientes = Patient.objects.filter(numero_historia=numero_historia)
+            if pacientes.count() > 1:
+                return Response({'error': 'Hay más de un paciente con el mismo identificador. Corrija los duplicados antes de continuar.'}, status=status.HTTP_400_BAD_REQUEST)
+            if pacientes.count() == 1:
+                patient = pacientes.first()
+                patient_fields_to_update = {
+                    'nombre': data.get('nombre'),
+                    'apellidos': data.get('apellidos'),
+                    'sexo': data.get('sexo'),
+                    'peso': data.get('peso'),
+                    'altura': data.get('altura'),
+                    'telefono': data.get('telefono'),
+                    'email': data.get('email'),
+                    'direccion': data.get('direccion'),
+                    'numero_historia': data.get('numero_historia'),
+                    'hospital': data.get('hospital'),
+                    'fecha_nacimiento': fecha_nacimiento_obj
+                }
+                updated = False
+                for field, value in patient_fields_to_update.items():
+                    if value not in [None, '', []] and getattr(patient, field) != value:
+                        setattr(patient, field, value)
+                        updated = True
+                if updated:
+                    patient.save()
+            else:
+                # Validar campos obligatorios para crear paciente
+                required_fields = ['dni', 'nombre', 'apellidos', 'fecha_nacimiento', 'sexo']
+                for field in required_fields:
+                    if not data.get(field):
+                        return Response({'error': f'El campo obligatorio "{field}" falta o está vacío.'}, status=status.HTTP_400_BAD_REQUEST)
+                create_fields = {
+                    'fecha_nacimiento': fecha_nacimiento_obj
+                }
+                for field in ['dni','nombre','apellidos','sexo','peso','altura','telefono','email','direccion','numero_historia','hospital']:
+                    if data.get(field) not in [None, '', []]:
+                        create_fields[field] = data.get(field)
+                if 'dni' not in create_fields:
+                    create_fields['dni'] = None
+                if 'numero_historia' not in create_fields:
+                    create_fields['numero_historia'] = f"AUTO_{int(timezone.now().timestamp())}"
+                patient = Patient.objects.create(**create_fields)
 
-            try:
-                medical_record = MedicalRecord.objects.get(id=medical_record_id)
-            except MedicalRecord.DoesNotExist:
-                return Response(
-                    {'error': 'Registro médico no encontrado'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
+            # --- 2. Crear el registro médico ---
+            # Calcular la edad del paciente
+            today = datetime.date.today()
+            if not fecha_nacimiento_obj:
+                if patient and patient.fecha_nacimiento:
+                    fecha_nacimiento_obj = patient.fecha_nacimiento
+                else:
+                    return Response({'error': 'No se puede calcular la edad sin una fecha de nacimiento.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Validar que el registro médico pertenece al paciente
-            if medical_record.patient_id != patient.id:
-                return Response(
-                    {'error': 'El registro médico no pertenece al paciente especificado'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            edad = today.year - fecha_nacimiento_obj.year - ((today.month, today.day) < (fecha_nacimiento_obj.month, fecha_nacimiento_obj.day))
 
-            # Validar que el paciente tiene todos los datos necesarios
-            if not all([patient.edad, patient.peso, patient.altura]):
-                return Response(
-                    {'error': 'El paciente no tiene todos los datos necesarios (edad, peso, altura)'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            medical_record = MedicalRecord.objects.create(
+                patient=patient,
+                edad=edad,
+                presion_sistolica=data.get('presion_sistolica', 120),
+                presion_diastolica=data.get('presion_diastolica', 80),
+                frecuencia_cardiaca=data.get('frecuencia_cardiaca', 70),
+                colesterol=data.get('colesterol'),
+                colesterol_hdl=data.get('colesterol_hdl'),
+                colesterol_ldl=data.get('colesterol_ldl'),
+                trigliceridos=data.get('trigliceridos'),
+                glucosa=data.get('glucosa'),
+                hemoglobina_glicosilada=data.get('hemoglobina_glicosilada'),
+                cigarrillos_dia=data.get('cigarrillos_dia', 0),
+                anos_tabaquismo=data.get('anos_tabaquismo', 0),
+                actividad_fisica=data.get('actividad_fisica', 'sedentario'),
+                antecedentes_cardiacos=data.get('antecedentes_cardiacos', 'no'),
+                diabetes=data.get('diabetes', False),
+                hipertension=data.get('hipertension', False),
+                medicamentos_actuales=data.get('medicamentos_actuales', []),
+                alergias=data.get('alergias', []),
+                observaciones=data.get('observaciones', ''),
+                fecha_registro=data.get('fecha_registro', timezone.now()),
+                external_record_id=data.get('external_record_id'),
+                external_data=data.get('external_data', {})
+            )
 
-            # Validar que el registro médico tiene los datos necesarios
-            required_fields = ['presion_sistolica', 'presion_diastolica']
-            missing_fields = [field for field in required_fields if not getattr(medical_record, field)]
-            if missing_fields:
-                return Response(
-                    {'error': f'Faltan datos requeridos en el registro médico: {", ".join(missing_fields)}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            # --- 3. Crear registro en MedicalData ---
+            age = 0
+            if fecha_nacimiento_obj:
+                today = datetime.date.today()
+                age = today.year - fecha_nacimiento_obj.year - ((today.month, today.day) < (fecha_nacimiento_obj.month, fecha_nacimiento_obj.day))
 
-            try:
-                prediction = self.prediction_service.get_prediction(patient, medical_record)
-                serializer = self.get_serializer(prediction)
-                return Response(serializer.data)
-            except ValueError as e:
-                return Response(
-                    {'error': str(e)},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            MedicalData.objects.create(
+                patient=patient,
+                age=age,
+                gender=patient.sexo,
+                smoking=data.get('cigarrillos_dia', 0) > 0,
+                alcohol_consumption=data.get('alcohol_consumption', False),
+                physical_activity=data.get('actividad_fisica', 'sedentario') != 'sedentario',
+                systolic_pressure=data.get('presion_sistolica', 120),
+                diastolic_pressure=data.get('presion_diastolica', 80),
+                heart_rate=data.get('frecuencia_cardiaca', 70),
+                cholesterol=data.get('colesterol'),
+                glucose=data.get('glucosa'),
+                family_history=data.get('antecedentes_cardiacos', 'no') == 'si',
+                previous_conditions=data.get('observaciones', ''),
+                prediction_date=timezone.now()
+            )
 
+            # --- 4. Generar predicción ---
+            prediction_obj = self.prediction_service.get_prediction(patient, medical_record)
+
+            # --- 5. Actualizar MedicalData con los resultados ---
+            medical_data_record = MedicalData.objects.filter(patient=patient).latest('date_recorded')
+            # Convertir de porcentaje (0-100) a decimal (0-1) para almacenar en risk_score
+            medical_data_record.risk_score = prediction_obj.probabilidad / 100.0
+            medical_data_record.prediction_date = prediction_obj.created_at
+            medical_data_record.save()
+
+            # --- 6. Devolver la respuesta serializada ---
+            serializer = self.get_serializer(prediction_obj)
+            return Response(serializer.data)
         except Exception as e:
             logger.error(f"Error en predicción: {str(e)}")
             return Response(
-                {'error': 'Error al realizar la predicción'},
+                {'error': f'Error al realizar la predicción: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

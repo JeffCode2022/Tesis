@@ -18,6 +18,7 @@ urlpatterns = [
     path('api/patients/', include('apps.patients.urls')),
     path('api/predictions/', include('apps.predictions.urls')),
     path('api/medical-data/', include('apps.medical_data.urls')),
+    path('api/medical-records/', include('apps.patients.urls')),  # Endpoint para medical-records
     path('api/analytics/', include('apps.analytics.urls')),
     path('api/integration/', include('apps.integration.urls')),
     path('api/auth/', include('apps.authentication.urls')),

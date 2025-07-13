@@ -49,6 +49,9 @@ export interface DashboardMetrics {
     precision: number;
   }>;
   model_accuracy: number;
+  patients_history: number[];
+  high_risk_history: number[];
+  accuracy_history: number[];
 }
 
 class AnalyticsService {

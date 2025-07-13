@@ -43,35 +43,25 @@ const adaptMetrics = (metrics: DashboardMetrics) => ({
   previous_month_patients: 0,
   previous_month_predictions: 0,
   previous_month_high_risk: 0,
-  previous_month_growth: 0
+  previous_month_growth: 0,
+  patients_history: metrics.patients_history,
+  high_risk_history: metrics.high_risk_history,
+  accuracy_history: metrics.accuracy_history
 })
 
-// Componente para mostrar el resumen en tiempo real (IMC y categoría)
-function RealTimeSummaryCard({ formData }: { formData: any }) {
-  const peso = parseFloat(formData.peso)
-  const altura = parseFloat(formData.altura)
-  const imc = peso && altura && peso > 0 && altura > 0 ? peso / ((altura / 100) * (altura / 100)) : null
-  const getIMCCategory = (imc: number) => {
-    if (imc < 18.5) return { label: "Bajo peso", color: "text-blue-600 dark:text-blue-400" }
-    if (imc < 25) return { label: "Normal", color: "text-green-600 dark:text-green-400" }
-    if (imc < 30) return { label: "Sobrepeso", color: "text-yellow-600 dark:text-yellow-400" }
-    return { label: "Obesidad", color: "text-red-600 dark:text-red-400" }
+
+
+const calculateAge = (fechaNacimiento?: string): number => {
+  if (!fechaNacimiento) return 0;
+  const birthDate = new Date(fechaNacimiento);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
   }
-  return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 flex flex-col items-center justify-center min-h-[180px]">
-      <h4 className="font-semibold text-gray-800 dark:text-white mb-2">Cálculos en Tiempo Real</h4>
-      <div className="inline-block px-4 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 shadow text-sm">
-        <span className="font-semibold text-gray-800 dark:text-white">IMC: </span>
-        <span className="font-bold text-lg">
-          {imc ? imc.toFixed(2) : "N/A"}
-        </span>
-        {imc && (
-          <span className={`ml-3 font-semibold ${getIMCCategory(imc).color}`}>{getIMCCategory(imc).label}</span>
-        )}
-      </div>
-    </div>
-  )
-}
+  return age;
+};
 
 export default function Dashboard() {
   const { isAuthenticated, user, isLoading } = useAuth()
@@ -104,18 +94,25 @@ export default function Dashboard() {
     nombre: "",
     apellidos: "",
     dni: "",
-    edad: "",
+    fecha_nacimiento: "",
     sexo: "M",
     peso: "",
     altura: "",
-    presionSistolica: "",
-    presionDiastolica: "",
+    presion_sistolica: "",
+    presion_diastolica: "",
+    frecuencia_cardiaca: "",
     colesterol: "",
+    colesterol_hdl: "",
+    colesterol_ldl: "",
+    trigliceridos: "",
     glucosa: "",
-    cigarrillosDia: "",
-    anosTabaquismo: "",
-    actividadFisica: "sedentario",
-    antecedentesCardiacos: "no",
+    hemoglobina_glicosilada: "",
+    cigarrillos_dia: "",
+    anos_tabaquismo: "",
+    actividad_fisica: "sedentario",
+    antecedentes_cardiacos: "no",
+    diabetes: "no",
+    hipertension: "no",
     numero_historia: "",
   })
 
@@ -143,30 +140,12 @@ export default function Dashboard() {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const handlePredict = async () => {
+  const handlePredict = async (result: any) => {
     try {
-      const predictionData: PredictionData = {
-        nombre: formData.nombre,
-        apellidos: formData.apellidos,
-        dni: formData.dni,
-        edad: Number(formData.edad),
-        sexo: formData.sexo,
-        peso: Number(formData.peso),
-        altura: Number(formData.altura),
-        presionSistolica: Number(formData.presionSistolica),
-        presionDiastolica: Number(formData.presionDiastolica),
-        colesterol: Number(formData.colesterol),
-        glucosa: Number(formData.glucosa),
-        cigarrillosDia: Number(formData.cigarrillosDia),
-        anosTabaquismo: Number(formData.anosTabaquismo),
-        actividadFisica: formData.actividadFisica,
-        antecedentesCardiacos: formData.antecedentesCardiacos,
-        numero_historia: formData.numero_historia,
-      }
-      const result = await predictionService.predict(predictionData)
+      console.log('[Dashboard] Recibiendo resultado de predicción:', result)
       setPrediction(result)
     } catch (error) {
-      console.error('Error making prediction:', error)
+      console.error('Error handling prediction result:', error)
     }
   }
 
@@ -194,18 +173,18 @@ export default function Dashboard() {
       const lines = content.split("\n").filter(line => line.trim())
       const processedData: Patient[] = lines.map((line, index) => {
         const values = line.split(",")
-        // Asumiendo el orden de los valores: nombre_completo, dni, edad, sexo, peso, altura, riesgo_actual, numero_historia, ultimo_registro
+        // Asumiendo el orden de los valores: nombre_completo, dni, fecha_nacimiento, sexo, peso, altura, riesgo_actual, numero_historia, ultimo_registro
         const nombreCompleto = values[0] || `Paciente ${index + 1}`
         const [nombre, ...apellidosArray] = nombreCompleto.split(" ")
         const apellidos = apellidosArray.join(" ")
 
-        const dni = values[1] || `${Math.floor(Math.random() * 100000000).toString().padStart(8, '0')}` // Generar DNI aleatorio si no está presente
-        const edad = Number(values[2]) || Math.floor(Math.random() * 50) + 30
+        const dni = values[1] || `DNI${index + 1}`
+        const fecha_nacimiento = values[2] || new Date(Date.now() - Math.random() * 50 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
         const sexo = values[3] || (Math.random() > 0.5 ? "M" : "F")
-        const peso = Number(values[4]) || Math.floor(Math.random() * 50) + 50
-        const altura = Number(values[5]) || Math.floor(Math.random() * 50) + 150
+        const peso = Number(values[4]) || Math.floor(Math.random() * 40) + 50
+        const altura = Number(values[5]) || Math.floor(Math.random() * 40) + 150
         const riesgoActual = values[6] || "Desconocido"
-        const numeroHistoria = values[7] || `HC-${index + 1}`
+        const numeroHistoria = values[7] || `H${index + 1}`
         const ultimoRegistro = values[8] || new Date().toISOString()
 
         const imcCalculado = peso > 0 && altura > 0 ? (peso / ((altura / 100) * (altura / 100))).toFixed(2) : "N/A"
@@ -214,8 +193,8 @@ export default function Dashboard() {
           id: uuidv4(),
           nombre: nombre,
           apellidos: apellidos,
-          dni: dni, // Añadido campo DNI
-          edad: edad,
+          dni: dni,
+          fecha_nacimiento: fecha_nacimiento,
           sexo: sexo,
           peso: peso,
           altura: altura,
@@ -296,28 +275,23 @@ export default function Dashboard() {
       case 'predictions':
         return (
           <>
-            <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
-              <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 flex flex-col lg:col-span-2">
-                <h3 className="text-lg font-semibold mb-4">Nueva Predicción</h3>
-                <PredictionForm 
-                  formData={formData}
-                  onFormChange={handleFormChange}
-                  onPredict={handlePredict}
-                />
-              </div>
-              <div className="hidden lg:block">
-                <RealTimeSummaryCard formData={formData} />
+            <div className="grid gap-6 grid-cols-1">
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 flex flex-col">
+                <div className="space-y-6">
+                  <PredictionForm 
+                    formData={formData} 
+                    onFormChange={handleFormChange} 
+                    onPredict={handlePredict} 
+                  />
+                  <MedicalDataImport 
+                    onFileUpload={handleFileUpload} 
+                    importedPatients={importedPatients}
+                    onDataProcess={processTextData}
+                  />
+                </div>
+
               </div>
             </div>
-            {/* En móviles, mostrar el resumen debajo del formulario */}
-            <div className="block lg:hidden mt-4">
-              <RealTimeSummaryCard formData={formData} />
-            </div>
-            {prediction && (
-              <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 flex flex-col mt-6">
-                <PredictionResults prediction={prediction} />
-              </div>
-            )}
           </>
         )
       case 'import':

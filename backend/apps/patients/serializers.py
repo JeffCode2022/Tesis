@@ -7,43 +7,29 @@ class MedicalRecordSerializer(serializers.ModelSerializer):
     presion_arterial = serializers.ReadOnlyField()
     indice_paquetes_ano = serializers.ReadOnlyField()
     riesgo_diabetes = serializers.ReadOnlyField()
+    patient_id = serializers.UUIDField(read_only=True, source='patient.id')
 
     class Meta:
         model = MedicalRecord
         fields = [
-            'id', 'patient', 'presion_sistolica', 'presion_diastolica', 'frecuencia_cardiaca',
-            'colesterol', 'colesterol_hdl', 'colesterol_ldl', 'trigliceridos', 'glucosa',
-            'hemoglobina_glicosilada', 'cigarrillos_dia', 'anos_tabaquismo', 'actividad_fisica',
-            'antecedentes_cardiacos', 'diabetes', 'hipertension', 'medicamentos_actuales',
-            'alergias', 'observaciones', 'external_record_id', 'external_data',
-            'fecha_registro', 'created_at', 'presion_arterial', 'indice_paquetes_ano',
-            'riesgo_diabetes'
+            'id', 'patient', 'patient_id', 'fecha_registro',
+            'presion_sistolica', 'presion_diastolica', 'frecuencia_cardiaca',
+            'colesterol', 'colesterol_hdl', 'colesterol_ldl', 'trigliceridos', 'glucosa', 'hemoglobina_glicosilada',
+            'cigarrillos_dia', 'anos_tabaquismo', 'actividad_fisica',
+            'antecedentes_cardiacos', 'diabetes', 'hipertension',
+            'medicamentos_actuales', 'alergias',
+            'observaciones', 'external_record_id', 'external_data',
+            'created_at', 'presion_arterial', 'indice_paquetes_ano', 'riesgo_diabetes'
         ]
         read_only_fields = [
-            'id', 'created_at', 'fecha_registro', 'presion_arterial',
+            'id', 'created_at', 'fecha_registro', 'presion_arterial', 
             'indice_paquetes_ano', 'riesgo_diabetes'
         ]
-
-    def create(self, validated_data):
-        print("Datos validados para crear:", validated_data)
-        # Asegurarse de que los campos JSON tengan valores por defecto
-        if 'medicamentos_actuales' not in validated_data:
-            validated_data['medicamentos_actuales'] = []
-        if 'alergias' not in validated_data:
-            validated_data['alergias'] = []
-        if 'external_data' not in validated_data:
-            validated_data['external_data'] = {}
         
-        # Convertir campos booleanos
-        for field in ['diabetes', 'hipertension']:
-            if field in validated_data:
-                validated_data[field] = bool(validated_data[field])
-        
-        return super().create(validated_data)
-
-    def validate(self, attrs):
-        print("Datos recibidos en validación:", attrs)
-        return attrs
+    def update(self, instance, validated_data):
+        # Eliminar patient de validated_data si está presente para evitar que se actualice
+        validated_data.pop('patient', None)
+        return super().update(instance, validated_data)
 
 class PatientSerializer(serializers.ModelSerializer):
     nombre_completo = serializers.ReadOnlyField()
@@ -53,8 +39,14 @@ class PatientSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Patient
-        fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        fields = [
+            'id', 'nombre', 'apellidos', 'dni', 'fecha_nacimiento', 'sexo', 'peso', 'altura',
+            'telefono', 'email', 'direccion', 'numero_historia', 'hospital',
+            'medico_tratante', 'external_patient_id', 'external_system_data',
+            'created_at', 'updated_at', 'is_active',
+            'nombre_completo', 'imc', 'medical_records', 'latest_medical_record'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'nombre_completo', 'imc', 'medical_records', 'latest_medical_record']
 
     def get_latest_medical_record(self, obj):
         latest_record = obj.medical_records.order_by('-fecha_registro').first()
@@ -71,8 +63,10 @@ class PatientListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Patient
         fields = [
-            'id', 'nombre_completo', 'dni', 'edad', 'sexo', 'imc', 
-            'numero_historia', 'ultimo_registro', 'riesgo_actual'
+            'id', 'nombre_completo', 'dni', 'fecha_nacimiento', 'sexo', 'imc', 
+            'numero_historia', 'ultimo_registro', 'riesgo_actual',
+            'peso', 'altura',
+            'telefono', 'email', 'direccion'
         ]
 
     def get_ultimo_registro(self, obj):
@@ -94,9 +88,8 @@ class PatientCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Patient
         fields = [
-            'id', 'nombre', 'apellidos', 'dni', 'edad', 'sexo', 'peso', 
-            'altura', 'email', 'telefono', 'direccion', 'hospital',
-            'numero_historia'
+            'id', 'nombre', 'apellidos', 'dni', 'fecha_nacimiento', 'sexo', 'peso', 'altura',
+            'telefono', 'email', 'direccion', 'numero_historia', 'hospital',
         ]
         read_only_fields = ['id']
 
@@ -108,60 +101,35 @@ class PatientDNISearchSerializer(serializers.Serializer):
     dni = serializers.CharField(max_length=20)
     
     def validate_dni(self, value):
-        # Aquí puedes agregar validación adicional del DNI si es necesario
         return value
     
     def get_patient_data(self):
         dni = self.validated_data['dni']
-        try:
-            # Intentar obtener datos del paciente existente
-            patient = Patient.objects.get(dni=dni)
+        pacientes = Patient.objects.filter(dni=dni)
+        if pacientes.count() == 1:
+            patient = pacientes.first()
             return {
                 'exists': True,
                 'data': PatientSerializer(patient).data
             }
-        except Patient.DoesNotExist:
-            # Si no existe, intentar obtener datos del sistema externo
-            try:
-                # Aquí puedes agregar la lógica para obtener datos del sistema externo
-                # Por ejemplo, usando una API externa
-                external_data = self._get_external_data(dni)
-                return {
-                    'exists': False,
-                    'data': external_data
-                }
-            except Exception as e:
-                return {
-                    'exists': False,
-                    'error': str(e)
-                }
-    
-    def _get_external_data(self, dni):
-        # Aquí puedes implementar la lógica para obtener datos del sistema externo
-        # Por ejemplo, usando una API externa
-        # Este es un ejemplo, deberás adaptarlo a tu sistema externo
-        try:
-            # Ejemplo de llamada a API externa
-            response = requests.get(
-                f"{settings.EXTERNAL_API_URL}/patients/{dni}",
-                headers={"Authorization": f"Bearer {settings.EXTERNAL_API_TOKEN}"}
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-            # Mapear los datos externos al formato de tu modelo
+        elif pacientes.count() > 1:
             return {
-                'dni': dni,
-                'nombre': data.get('nombre', ''),
-                'apellidos': data.get('apellidos', ''),
-                'edad': data.get('edad'),
-                'sexo': data.get('sexo'),
-                'numero_historia': data.get('numero_historia', ''),
-                # Agregar otros campos según sea necesario
+                'error': f"Hay {pacientes.count()} pacientes con el mismo DNI. Contacte al administrador para resolver duplicados.",
+                'exists': False,
+                'data': None
             }
-        except Exception as e:
-            raise serializers.ValidationError(f"Error al obtener datos externos: {str(e)}")
-<<<<<<< HEAD
+        else:
+            return {
+                'exists': False,
+                'data': {
+                    'dni': dni,
+                    'nombre': '',
+                    'apellidos': '',
+                    'fecha_nacimiento': None,
+                    'sexo': '',
+                    'numero_historia': '',
+                }
+            }
 
 # Serializador optimizado para la predicción masiva
 class PatientForPredictionSerializer(serializers.ModelSerializer):
@@ -181,11 +149,9 @@ class PatientForPredictionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Patient
         fields = [
-            'nombre', 'apellidos', 'dni', 'edad', 'sexo', 'peso', 'altura',
+            'nombre', 'apellidos', 'dni', 'fecha_nacimiento', 'sexo', 'peso', 'altura',
             'numero_historia',
             # Campos anotados desde el último registro médico
             'presionSistolica', 'presionDiastolica', 'colesterol', 'glucosa',
             'cigarrillosDia', 'anosTabaquismo', 'actividadFisica', 'antecedentesCardiacos'
         ]
-=======
->>>>>>> f5cbcea3f3cda2b84fd018f94a310197f333dfad

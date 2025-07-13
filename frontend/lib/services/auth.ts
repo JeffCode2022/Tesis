@@ -182,46 +182,104 @@ const isValidUser = (user: any): user is User => {
 export const authService = {
   async login(data: LoginData): Promise<AuthResponse> {
     try {
-      console.log('[auth.ts] Iniciando login...', { email: data.email, rememberMe: data.rememberMe })
-      console.log('[auth.ts] Datos a enviar al backend:', { email: data.email, password: data.password });
-      const response = await api.post<AuthResponse>("/api/authentication/login/", {
-        email: data.email,
-        password: data.password,
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        withCredentials: true
-      })
+      console.log('[auth.ts] Iniciando login...', { email: data.email, rememberMe: data.rememberMe });
       
-      console.log('[auth.ts] Respuesta del servidor:', {
-        access: response.data.access ? 'Token presente' : 'Token ausente',
-        refresh: response.data.refresh ? 'Refresh token presente' : 'Refresh token ausente',
-        user: response.data.user ? 'Usuario presente' : 'Usuario ausente'
-      });
-
-      if (!response.data.access || !response.data.refresh || !response.data.user) {
-        throw new Error("Respuesta de login inválida")
+      // Validar datos de entrada
+      if (!data.email || !data.password) {
+        throw new AuthError("Correo y contraseña son requeridos", "MISSING_CREDENTIALS");
       }
 
-      // Guardar datos de autenticación
-      setAuthData({
-        token: response.data.access,
-        refresh: response.data.refresh,
-        user: response.data.user
-      }, data.rememberMe)
+      console.log('[auth.ts] Enviando petición de login...');
+      const response = await api.post<AuthResponse>(
+        "/api/authentication/login/", 
+        {
+          email: data.email,
+          password: data.password,
+        }, 
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          withCredentials: true,
+          timeout: 10000 // 10 segundos de timeout
+        }
+      );
+      
+      console.log('[auth.ts] Respuesta del servidor recibida');
+      
+      // Validar la respuesta
+      if (!response.data) {
+        throw new AuthError("No se recibieron datos del servidor", "NO_RESPONSE");
+      }
 
-      return response.data
+      const { access, refresh, user } = response.data;
+      
+      if (!access || !refresh || !user) {
+        console.error('[auth.ts] Respuesta incompleta del servidor:', { 
+          hasAccess: !!access, 
+          hasRefresh: !!refresh, 
+          hasUser: !!user 
+        });
+        throw new AuthError("Respuesta de autenticación incompleta", "INCOMPLETE_RESPONSE");
+      }
+
+      console.log('[auth.ts] Autenticación exitosa, guardando datos...');
+      
+      try {
+        // Guardar datos de autenticación
+        setAuthData({
+          token: access,
+          refresh: refresh,
+          user: user
+        }, data.rememberMe);
+        
+        console.log('[auth.ts] Datos de autenticación guardados exitosamente');
+        return response.data;
+        
+      } catch (storageError) {
+        console.error('[auth.ts] Error al guardar datos de autenticación:', storageError);
+        throw new AuthError("Error al guardar la sesión", "STORAGE_ERROR");
+      }
+      
     } catch (error) {
-      console.error("[auth.ts] Error en login:", error)
+      console.error('[auth.ts] Error en el proceso de login:', error);
+      
       if (axios.isAxiosError(error)) {
-        if (error.response?.status === 401) {
-          throw new AuthError("Credenciales inválidas", "INVALID_CREDENTIALS")
-        } else if (error.response?.status === 400) {
-          throw new AuthError(error.response.data.message || "Datos de inicio de sesión inválidos", "INVALID_DATA")
+        console.error('[auth.ts] Detalles del error Axios:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          code: error.code,
+          message: error.message
+        });
+        
+        if (error.code === 'ECONNABORTED') {
+          throw new AuthError("Tiempo de espera agotado. Por favor, intente nuevamente.", "TIMEOUT_ERROR");
+        } else if (error.response) {
+          // El servidor respondió con un código de estado fuera del rango 2xx
+          if (error.response.status === 401) {
+            throw new AuthError("Credenciales inválidas. Por favor, verifique su correo y contraseña.", "INVALID_CREDENTIALS");
+          } else if (error.response.status === 400) {
+            const message = error.response.data?.message || "Datos de inicio de sesión inválidos";
+            throw new AuthError(message, "INVALID_DATA");
+          } else if (error.response.status >= 500) {
+            throw new AuthError("Error en el servidor. Por favor, intente más tarde.", "SERVER_ERROR");
+          } else {
+            throw new AuthError(`Error en la solicitud: ${error.response.status}`, "REQUEST_ERROR");
+          }
+        } else if (error.request) {
+          // La solicitud fue hecha pero no se recibió respuesta
+          throw new AuthError("No se pudo conectar con el servidor. Verifique su conexión a internet.", "NETWORK_ERROR");
         }
       }
-      throw error
+      
+      // Si el error ya es un AuthError, simplemente relanzarlo
+      if (error instanceof AuthError) {
+        throw error;
+      }
+      
+      // Para cualquier otro tipo de error
+      throw new AuthError("Error inesperado durante el inicio de sesión", "UNKNOWN_ERROR");
     }
   },
 

@@ -147,6 +147,16 @@ instance.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // Log detallado para errores 400
+    if (error.response?.status === 400) {
+      console.error('[api.ts] Error 400 detectado:');
+      console.error('[api.ts] URL:', originalRequest.url);
+      console.error('[api.ts] Method:', originalRequest.method);
+      console.error('[api.ts] Request data:', originalRequest.data);
+      console.error('[api.ts] Response data:', error.response.data);
+      console.error('[api.ts] Response status:', error.response.status);
+    }
+
     // Si el error es 401 y no es una petición de refresh
     if (error.response?.status === 401 && !originalRequest.url?.includes('/token/refresh/')) {
       try {

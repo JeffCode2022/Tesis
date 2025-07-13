@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 class PredictionService:
     def __init__(self):
         self.model = self._load_model()
+        self.scaler = self._load_scaler()  # Cargar el scaler
         self.cache_ttl = settings.CACHE_TTL
 
     def _load_model(self):
@@ -25,9 +26,25 @@ class PredictionService:
             logger.error(f"Error cargando el modelo: {str(e)}")
             return None
 
+    def _load_scaler(self):
+        """Carga el scaler desde el archivo guardado"""
+        try:
+            scaler_path = settings.ML_MODELS_PATH / 'scaler.pkl'
+            if not scaler_path.exists():
+                logger.warning("El scaler no está disponible. Se usará normalización básica.")
+                return None
+            return joblib.load(scaler_path)
+        except Exception as e:
+            logger.error(f"Error cargando el scaler: {str(e)}")
+            return None
+
     def is_model_available(self):
         """Verifica si el modelo está disponible"""
         return self.model is not None
+
+    def is_scaler_available(self):
+        """Verifica si el scaler está disponible"""
+        return self.scaler is not None
 
     def _get_cache_key(self, patient_id, medical_record_id):
         """Genera una clave única para el caché"""
@@ -39,14 +56,23 @@ class PredictionService:
             # Preparar datos para la predicción
             features = self._prepare_features(patient, medical_record)
             logger.info(f"Modelo disponible: {self.is_model_available()}")
+            logger.info(f"Scaler disponible: {self.is_scaler_available()}")
             logger.info(f"Features usados para la predicción: {features}")
 
             if not self.is_model_available():
                 logger.error("El modelo de predicción no está disponible. No se puede calcular la predicción real.")
                 raise ValueError("El modelo de predicción no está disponible. No se puede calcular la predicción.")
             else:
-                # Realizar predicción multiclase
-                class_probs = self.model.predict_proba([features])[0]
+                # Normalizar los features usando el scaler (CRÍTICO)
+                if self.is_scaler_available():
+                    features_scaled = self.scaler.transform([features])[0]
+                    logger.info(f"Features normalizados: {features_scaled}")
+                else:
+                    logger.warning("Scaler no disponible, usando features sin normalizar")
+                    features_scaled = features
+                
+                # Realizar predicción multiclase con datos normalizados
+                class_probs = self.model.predict_proba([features_scaled])[0]
                 predicted_class = int(np.argmax(class_probs))
                 probability = float(class_probs[predicted_class])
                 risk_level = self._determine_risk_level_multiclass(predicted_class)
@@ -74,6 +100,14 @@ class PredictionService:
     def _prepare_features(self, patient, medical_record):
         """Prepara los features para el modelo, igual que en el entrenamiento"""
         try:
+            # Calcular edad desde fecha de nacimiento
+            from datetime import date
+            if patient.fecha_nacimiento:
+                today = date.today()
+                age = today.year - patient.fecha_nacimiento.year - ((today.month, today.day) < (patient.fecha_nacimiento.month, patient.fecha_nacimiento.day))
+            else:
+                age = 0
+            
             # Calcular IMC
             imc = patient.peso / ((patient.altura / 100) ** 2) if patient.altura else 0
             # Calcular índice de paquetes/año
@@ -88,7 +122,7 @@ class PredictionService:
             antecedentes_encoded = antecedentes_mapping.get(medical_record.antecedentes_cardiacos, 0)
 
             features = [
-                patient.edad,
+                age,
                 imc,
                 medical_record.presion_sistolica,
                 medical_record.presion_diastolica,
@@ -137,35 +171,43 @@ class PredictionService:
         # Análisis de IMC
         imc = features[1]
         if imc >= 30:
-            risk_factors.append("Obesidad (IMC ≥ 30)")
+            risk_factors.append(f"Obesidad (IMC: {imc:.1f} - Clase I)")
         elif imc >= 25:
-            risk_factors.append("Sobrepeso (IMC 25-29.9)")
+            risk_factors.append(f"Sobrepeso (IMC: {imc:.1f})")
             
         # Análisis de presión arterial
-        if features[2] >= 140 or features[3] >= 90:
-            risk_factors.append("Presión arterial elevada")
+        sistolica, diastolica = features[2], features[3]
+        if sistolica >= 140 or diastolica >= 90:
+            risk_factors.append(f"Presión arterial elevada ({int(sistolica)}/{int(diastolica)} mmHg)")
             
         # Análisis de colesterol
-        if features[4] >= 200:
-            risk_factors.append("Colesterol elevado")
+        colesterol = features[4]
+        if colesterol >= 240:
+            risk_factors.append(f"Colesterol muy elevado ({int(colesterol)} mg/dL)")
+        elif colesterol >= 200:
+            risk_factors.append(f"Colesterol límite alto ({int(colesterol)} mg/dL)")
             
         # Análisis de glucosa
-        if features[5] >= 100:
-            risk_factors.append("Glucosa elevada")
+        glucosa = features[5]
+        if glucosa >= 126:
+            risk_factors.append(f"Glucosa en rango de diabetes ({int(glucosa)} mg/dL)")
+        elif glucosa >= 100:
+            risk_factors.append(f"Glucosa en rango prediabético ({int(glucosa)} mg/dL)")
             
         # Análisis de tabaquismo
-        if features[6] > 0:
-            risk_factors.append(f"Tabaquismo: {features[6]} cigarrillos/día")
-        if features[7] > 0:
-            risk_factors.append(f"Años de tabaquismo: {features[7]}")
+        paquetes_anio = features[6]
+        if paquetes_anio > 20:
+            risk_factors.append(f"Alto consumo de tabaco ({paquetes_anio:.1f} paquetes/año)")
+        elif paquetes_anio > 0:
+            risk_factors.append(f"Consumo de tabaco ({paquetes_anio:.1f} paquetes/año)")
             
         # Análisis de actividad física
-        if features[8] <= 0.25:
+        if features[7] <= 0.25:
             risk_factors.append("Estilo de vida sedentario")
             
         # Análisis de antecedentes
-        if features[9] == 1:
-            risk_factors.append("Antecedentes cardíacos")
+        if features[8] == 1:
+            risk_factors.append("Antecedentes familiares de enfermedad cardíaca")
             
         return risk_factors
 
@@ -213,7 +255,7 @@ class PredictionService:
         if features[6] > 0:
             recommendations.append("Considerar programas para dejar de fumar")
             
-        if features[8] <= 0.25:
+        if features[7] <= 0.25:
             recommendations.append("Aumentar la actividad física diaria")
             
         return recommendations
@@ -226,9 +268,9 @@ class PredictionService:
             "presion_arterial": self._calculate_bp_score(features[2], features[3]),
             "colesterol": self._calculate_cholesterol_score(features[4]),
             "glucosa": self._calculate_glucose_score(features[5]),
-            "tabaquismo": self._calculate_smoking_score(features[6], features[7]),
-            "actividad_fisica": self._calculate_activity_score(features[8]),
-            "antecedentes": self._calculate_history_score(features[9])
+            "tabaquismo": self._calculate_smoking_score(features[6], 0),  # Solo índice de paquetes
+            "actividad_fisica": self._calculate_activity_score(features[7]),
+            "antecedentes": self._calculate_history_score(features[8])
         }
         return scores
 

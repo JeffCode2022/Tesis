@@ -1,7 +1,8 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Count, Avg, Q, Case, When, CharField, Value
+from django.db.models import Count, Avg, Q, Case, When, CharField, Value, F, IntegerField
+from django.db.models.functions import Extract
 from django.utils import timezone
 from datetime import timedelta
 from apps.patients.models import Patient, MedicalRecord
@@ -34,7 +35,17 @@ class AnalyticsViewSet(viewsets.ViewSet):
         
         # Evolución mensual
         monthly_evolution = self._get_monthly_evolution()
-        
+
+        # Arrays históricos para sparklines
+        pacientes_history = []
+        high_risk_history = []
+        accuracy_history = []
+        for data in monthly_evolution:
+            pacientes_history.append(data.get('predicciones', 0))
+            # Para riesgo alto, contar solo predicciones de riesgo alto por mes (simplificado: usar predicciones totales si no hay desglose)
+            high_risk_history.append(data.get('alto', 0) if 'alto' in data else data.get('predicciones', 0))
+            accuracy_history.append(data.get('precision', 0))
+
         return Response({
             'total_patients': total_patients,
             'total_predictions': total_predictions,
@@ -44,16 +55,22 @@ class AnalyticsViewSet(viewsets.ViewSet):
             'age_risk_distribution': age_risk_distribution,
             'common_risk_factors': common_risk_factors,
             'monthly_evolution': monthly_evolution,
-            'model_accuracy': 97.3  # Valor fijo por ahora
+            'model_accuracy': 97.3,  # Valor fijo por ahora
+            'patients_history': pacientes_history,
+            'high_risk_history': high_risk_history,
+            'accuracy_history': accuracy_history
         })
     
     def _get_age_risk_distribution(self):
         """Distribución de riesgo por grupos de edad"""
         predictions_with_age = Prediction.objects.select_related('patient').annotate(
+            age=Extract('patient__fecha_nacimiento', 'year'),
+            current_year=Extract(timezone.now(), 'year'),
+            age_years=F('current_year') - F('age'),
             age_group=Case(
-                When(patient__edad__lt=31, then=Value('18-30')),
-                When(patient__edad__lt=46, then=Value('31-45')),
-                When(patient__edad__lt=61, then=Value('46-60')),
+                When(age_years__lt=31, then=Value('18-30')),
+                When(age_years__lt=46, then=Value('31-45')),
+                When(age_years__lt=61, then=Value('46-60')),
                 default=Value('60+')
             )
         )

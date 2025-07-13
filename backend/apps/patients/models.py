@@ -7,6 +7,7 @@ class Patient(models.Model):
     GENDER_CHOICES = [
         ('M', 'Masculino'),
         ('F', 'Femenino'),
+        ('O', 'Otro'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -15,7 +16,7 @@ class Patient(models.Model):
     dni = models.CharField(max_length=20, unique=True, help_text="DNI del paciente")
     nombre = models.CharField(max_length=200)
     apellidos = models.CharField(max_length=200)
-    edad = models.IntegerField()
+    fecha_nacimiento = models.DateField(null=True, blank=True)
     sexo = models.CharField(max_length=1, choices=GENDER_CHOICES)
     peso = models.FloatField(help_text="Peso en kilogramos")
     altura = models.FloatField(help_text="Altura en centímetros")
@@ -79,6 +80,7 @@ class MedicalRecord(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='medical_records')
+    edad = models.IntegerField(help_text="Edad del paciente en años", null=True, blank=True)
     
     # Signos vitales
     presion_sistolica = models.IntegerField(help_text="mmHg")

@@ -1,14 +1,12 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import React, { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/useAuth"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { AlertCircle, Heart, Activity, TrendingUp, Shield, Users, BarChart3, Info, Sun, Moon } from "lucide-react"
+import { AlertCircle, Heart, Activity, TrendingUp, Shield, Users, BarChart3, Info, Sun, Moon, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
@@ -16,14 +14,30 @@ import { useTheme } from 'next-themes'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login } = useAuth(false)
+  const { login, isAuthenticated, isLoading } = useAuth(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [showSupportModal, setShowSupportModal] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const { theme, setTheme } = useTheme()
+
+  // Redirigir si ya está autenticado
+  React.useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.push('/dashboard')
+    }
+  }, [isLoading, isAuthenticated, router])
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="text-2xl font-semibold text-gray-700 dark:text-gray-300">Cargando...</div>
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,8 +52,7 @@ export default function LoginPage() {
 
       const loginResponse = await login(email, password, rememberMe)
       console.log("Login exitoso, respuesta:", loginResponse)
-      router.push("/dashboard")
-      console.log("Login: Redirigiendo a /dashboard...")
+      // La redirección ahora se maneja en el hook useAuth
     } catch (err: any) {
       console.error("Error en el login:", err)
       if (err.response?.status === 401) {
@@ -143,16 +156,30 @@ export default function LoginPage() {
                     <Label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Contraseña
                     </Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      disabled={loading}
-                      className="w-full h-12 px-4 bg-white/40 dark:bg-neutral-700/50 backdrop-blur-xl border border-white/40 dark:border-white/20 rounded-xl focus:ring-2 focus:ring-[#2563EB]/50 focus:border-[#2563EB]/50 transition-all placeholder:text-gray-500 dark:placeholder:text-gray-400 shadow-inner disabled:opacity-50 text-black dark:text-white"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        disabled={loading}
+                        className="w-full h-12 px-4 pr-12 bg-white/40 dark:bg-neutral-700/50 backdrop-blur-xl border border-white/40 dark:border-white/20 rounded-xl focus:ring-2 focus:ring-[#2563EB]/50 focus:border-[#2563EB]/50 transition-all placeholder:text-gray-500 dark:placeholder:text-gray-400 shadow-inner disabled:opacity-50 text-black dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5" />
+                        ) : (
+                          <Eye className="h-5 w-5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between">
@@ -162,7 +189,7 @@ export default function LoginPage() {
                         checked={rememberMe}
                         onCheckedChange={(checked) => setRememberMe(checked as boolean)}
                         disabled={loading}
-                        className="border-white/40 data-[state=checked]:bg-[#2563EB] data-[state=checked]:border-[#2563EB]"
+                        className="border-gray-300 dark:border-white/40 data-[state=checked]:bg-[#2563EB] data-[state=checked]:border-[#2563EB] dark:data-[state=checked]:bg-[#2563EB] dark:data-[state=checked]:border-[#2563EB]"
                       />
                       <Label htmlFor="rememberMe" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
                         Recordarme
@@ -187,24 +214,42 @@ export default function LoginPage() {
                   </Button>
                 </form>
 
-                {/* MODAL DE SOPORTE */}
+                {/* MODAL DE SOPORTE - GLASSMORPHISM */}
                 <Dialog open={showSupportModal} onOpenChange={setShowSupportModal}>
-                  <DialogContent className="max-w-xs p-0 border border-[#2563EB] shadow-xl rounded-xl bg-white dark:bg-gray-900 animate-fade-in">
-                    <div className="flex items-center gap-2 px-4 py-3 rounded-t-xl bg-[#2563EB]">
-                      <Info className="w-5 h-5 text-white" />
-                      <span className="text-white font-semibold text-base">Soporte de Cuenta</span>
-                    </div>
-                    <div className="px-4 pt-3 pb-2 flex flex-col items-center">
-                      <p className="text-gray-700 text-sm text-center mb-3 mt-1">
-                        Por tu seguridad, la recuperación o cambio de contraseña<br />
-                        <span className="font-semibold">solo puede ser gestionada por el área de soporte.</span>
-                      </p>
-                      <button
-                        className="px-4 py-1.5 bg-[#2563EB] text-white rounded-lg font-semibold shadow hover:bg-[#1E40AF] transition-all text-sm mt-1"
-                        onClick={() => setShowSupportModal(false)}
-                      >
-                        Entendido
-                      </button>
+                  <DialogContent className="p-0 border-0 overflow-hidden bg-transparent max-w-xs">
+                    <DialogTitle className="sr-only">Soporte de Cuenta</DialogTitle>
+                    <div className="relative bg-white/90 dark:bg-gray-800/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden border border-white/40 dark:border-white/20">
+                      {/* Borde superior con gradiente */}
+                      <div className="h-2 bg-gradient-to-r from-[#2563EB] to-[#3B82F6]"></div>
+                      
+                      <div className="relative z-10">
+                        {/* Encabezado */}
+                        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+                          <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30">
+                            <Info className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Soporte de Cuenta</h3>
+                        </div>
+                        
+                        {/* Contenido */}
+                        <div className="px-5 py-6">
+                          <p className="text-base text-gray-700 dark:text-gray-300 mb-6 leading-relaxed">
+                            Por tu seguridad, la recuperación o cambio de contraseña
+                            <span className="block font-medium text-gray-900 dark:text-white mt-2">
+                              solo puede ser gestionada por el área de soporte.
+                            </span>
+                          </p>
+                          
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => setShowSupportModal(false)}
+                              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            >
+                              Entendido
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </DialogContent>
                 </Dialog>

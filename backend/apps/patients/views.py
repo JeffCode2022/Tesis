@@ -3,18 +3,11 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
-<<<<<<< HEAD
 from django.db.models import Subquery, OuterRef
 from .models import Patient, MedicalRecord
 from .serializers import (
     PatientSerializer, PatientCreateSerializer, PatientListSerializer,
     MedicalRecordSerializer, PatientDNISearchSerializer, PatientForPredictionSerializer
-=======
-from .models import Patient, MedicalRecord
-from .serializers import (
-    PatientSerializer, PatientCreateSerializer, PatientListSerializer,
-    MedicalRecordSerializer, PatientDNISearchSerializer
->>>>>>> f5cbcea3f3cda2b84fd018f94a310197f333dfad
 )
 
 class PatientViewSet(viewsets.ModelViewSet):
@@ -23,10 +16,9 @@ class PatientViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['sexo', 'hospital', 'medico_tratante']
     search_fields = ['nombre', 'apellidos', 'numero_historia', 'email', 'dni']
-    ordering_fields = ['created_at', 'edad', 'nombre']
+    ordering_fields = ['created_at', 'nombre']
     ordering = ['-created_at']
 
-<<<<<<< HEAD
     @property
     def paginator(self):
         """
@@ -36,8 +28,6 @@ class PatientViewSet(viewsets.ModelViewSet):
             return None
         return super().paginator
 
-=======
->>>>>>> f5cbcea3f3cda2b84fd018f94a310197f333dfad
     def get_serializer_class(self):
         if self.action == 'list':
             return PatientListSerializer
@@ -48,7 +38,6 @@ class PatientViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(medico_tratante=self.request.user)
 
-<<<<<<< HEAD
     @action(detail=False, methods=['get'], url_path='for-prediction')
     def for_prediction(self, request):
         """
@@ -73,8 +62,6 @@ class PatientViewSet(viewsets.ModelViewSet):
         serializer = PatientForPredictionSerializer(patient_queryset, many=True)
         return Response(serializer.data)
 
-=======
->>>>>>> f5cbcea3f3cda2b84fd018f94a310197f333dfad
     @action(detail=False, methods=['post'])
     def search_by_dni(self, request):
         serializer = PatientDNISearchSerializer(data=request.data)
@@ -85,45 +72,18 @@ class PatientViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def add_medical_record(self, request, pk=None):
-        print("Headers en add_medical_record:", request.headers)
-        print("Usuario autenticado:", request.user)
         try:
             patient = self.get_object()
             data = request.data.copy()
-            
-            # Convertir valores booleanos (solo para campos BooleanField)
-            if 'diabetes' in data:
-                data['diabetes'] = data['diabetes'].lower() == 'true'
-            if 'hipertension' in data:
-                data['hipertension'] = data['hipertension'].lower() == 'true'
-            
-            # Convertir valores numéricos
-            numeric_fields = [
-                'presion_sistolica', 'presion_diastolica', 'frecuencia_cardiaca',
-                'colesterol', 'colesterol_hdl', 'colesterol_ldl', 'trigliceridos',
-                'glucosa', 'hemoglobina_glicosilada', 'cigarrillos_dia', 'anos_tabaquismo'
-            ]
-            for field in numeric_fields:
-                if field in data and data[field]:
-                    try:
-                        data[field] = float(data[field])
-                    except (ValueError, TypeError):
-                        data[field] = None
-            
-            # Agregar el paciente al contexto
             data['patient'] = patient.id
-            
             serializer = MedicalRecordSerializer(data=data)
             if serializer.is_valid():
-                print("Datos validados:", serializer.validated_data)
                 medical_record = serializer.save()
                 return Response(MedicalRecordSerializer(medical_record).data, status=status.HTTP_201_CREATED)
-            print("Errores de validación:", serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Patient.DoesNotExist:
             return Response({'error': 'Paciente no encontrado'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            print("Error al crear registro médico:", str(e))
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'])
@@ -165,4 +125,49 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
     ordering = ['-fecha_registro']
 
     def perform_create(self, serializer):
-        serializer.save(medico_registro=self.request.user)
+        serializer.save()
+        
+    def perform_update(self, serializer):
+        # Asegurarse de que el patient_id se mantenga igual al actualizar
+        instance = self.get_object()
+        
+        # Si se envía el campo patient en los datos, asegurarse de que sea el mismo que el registro actual
+        if 'patient' in serializer.validated_data:
+            if str(serializer.validated_data['patient'].id) != str(instance.patient_id):
+                # Si se intenta cambiar el paciente, mantener el original
+                serializer.validated_data['patient'] = instance.patient
+        else:
+            # Si no se envía el campo patient, establecerlo con el valor actual
+            serializer.validated_data['patient'] = instance.patient
+            
+        serializer.save()
+
+    def get_queryset(self):
+        queryset = MedicalRecord.objects.all()
+        patient_id = self.request.query_params.get('patient', None)
+        print(f"[MedicalRecordViewSet] patient_id recibido: {patient_id}")
+        if patient_id:
+            queryset = queryset.filter(patient_id=patient_id)
+            print(f"[MedicalRecordViewSet] Registros encontrados: {queryset.count()}")
+        return queryset.order_by('-fecha_registro')
+
+    def list(self, request, *args, **kwargs):
+        """Sobrescribir el método list para manejar mejor los filtros"""
+        try:
+            queryset = self.get_queryset()
+            print(f"[MedicalRecordViewSet] QuerySet final: {queryset.count()} registros")
+            
+            # Aplicar paginación si es necesario
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            print(f"[MedicalRecordViewSet] Error en list: {str(e)}")
+            return Response(
+                {'error': 'Error al obtener registros médicos'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

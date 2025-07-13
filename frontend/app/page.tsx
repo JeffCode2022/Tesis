@@ -86,9 +86,23 @@ const initialMonthlyPredictionsData = [
 // Datos iniciales de pacientes (solo para demostración, se cargarán de la API)
 const initialPatientsData: Patient[] = []
 
+const calculateAge = (fechaNacimiento?: string): number => {
+  if (!fechaNacimiento) return 0;
+  const birthDate = new Date(fechaNacimiento);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+};
+
 type FormData = {
   nombre: string
-  edad: string
+  apellidos: string
+  dni: string
+  fecha_nacimiento: string
   sexo: string
   peso: string
   altura: string

@@ -81,8 +81,16 @@ class CardiovascularMLService:
         antecedentes_mapping = {'si': 1, 'no': 0, 'desconoce': 0.5}
         antecedentes_encoded = antecedentes_mapping.get(medical_record.antecedentes_cardiacos, 0)
         
+        # Calcular edad desde fecha de nacimiento
+        from datetime import date
+        if patient.fecha_nacimiento:
+            today = date.today()
+            age = today.year - patient.fecha_nacimiento.year - ((today.month, today.day) < (patient.fecha_nacimiento.month, patient.fecha_nacimiento.day))
+        else:
+            age = 0
+        
         features = {
-            'edad': patient.edad,
+            'edad': age,
             'imc': imc,
             'presion_sistolica': medical_record.presion_sistolica,
             'presion_diastolica': medical_record.presion_diastolica,

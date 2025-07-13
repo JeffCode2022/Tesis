@@ -11,23 +11,33 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
 import { predictionService } from "@/lib/services/predictions"
 import { patientService } from "@/lib/services/patients"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { PredictionResultModal } from "@/components/prediction-results/PredictionResultModal"
+import type { Patient } from "@/lib/services/patients"
 
 interface FormData {
   nombre: string
   apellidos: string
   dni: string
-  edad: string
+  fecha_nacimiento: string
   sexo: string
   peso: string
   altura: string
-  presionSistolica: string
-  presionDiastolica: string
+  presion_sistolica: string
+  presion_diastolica: string
+  frecuencia_cardiaca: string
   colesterol: string
+  colesterol_hdl: string
+  colesterol_ldl: string
+  trigliceridos: string
   glucosa: string
-  cigarrillosDia: string
-  anosTabaquismo: string
-  actividadFisica: string
-  antecedentesCardiacos: string
+  hemoglobina_glicosilada: string
+  cigarrillos_dia: string
+  anos_tabaquismo: string
+  actividad_fisica: string
+  antecedentes_cardiacos: string
+  diabetes: string
+  hipertension: string
   numero_historia: string
 }
 
@@ -40,59 +50,63 @@ interface PredictionFormProps {
 export function PredictionForm({ formData, onFormChange, onPredict }: PredictionFormProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-
-  // Cálculo de IMC en tiempo real
-  const imc = useMemo(() => {
-    const peso = parseFloat(formData.peso)
-    const altura = parseFloat(formData.altura)
-    if (!peso || !altura || peso <= 0 || altura <= 0) return null
-    const alturaM = altura / 100
-    return peso / (alturaM * alturaM)
-  }, [formData.peso, formData.altura])
-
-  const getIMCCategory = (imc: number) => {
-    if (imc < 18.5) return { label: "Bajo peso", color: "text-blue-600 dark:text-blue-400" }
-    if (imc < 25) return { label: "Normal", color: "text-green-600 dark:text-green-400" }
-    if (imc < 30) return { label: "Sobrepeso", color: "text-yellow-600 dark:text-yellow-400" }
-    return { label: "Obesidad", color: "text-red-600 dark:text-red-400" }
-  }
+  const [showModal, setShowModal] = useState(false)
+  const [predictionResult, setPredictionResult] = useState<any>(null)
+  const [searchingPatient, setSearchingPatient] = useState(false)
 
   const handleInputChange = (field: string, value: string) => {
     onFormChange(field, value)
   }
 
+
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Protección contra doble envío
+    if (loading) {
+      console.log('[PredictionForm] Formulario ya está procesando, ignorando envío adicional')
+      return
+    }
+    
     setLoading(true)
     setError("")
+    
+    console.log('[PredictionForm] Iniciando procesamiento de predicción...')
+    
     try {
       const predictionData = {
         nombre: formData.nombre,
         apellidos: formData.apellidos,
         dni: formData.dni,
-        edad: parseInt(formData.edad),
+        fecha_nacimiento: formData.fecha_nacimiento,
         sexo: formData.sexo,
         peso: parseFloat(formData.peso),
-        altura: parseInt(formData.altura),
-        presionSistolica: parseInt(formData.presionSistolica),
-        presionDiastolica: parseInt(formData.presionDiastolica),
-        colesterol: parseFloat(formData.colesterol),
-        glucosa: parseFloat(formData.glucosa),
-        cigarrillosDia: parseInt(formData.cigarrillosDia),
-        anosTabaquismo: parseInt(formData.anosTabaquismo),
-        actividadFisica: formData.actividadFisica || 'sedentario',
-        antecedentesCardiacos: formData.antecedentesCardiacos || 'no',
-        diabetes: false,
-        hipertension: false,
+        altura: parseFloat(formData.altura),
+        presionSistolica: parseInt(formData.presion_sistolica),
+        presionDiastolica: parseInt(formData.presion_diastolica),
+        colesterol: formData.colesterol ? parseFloat(formData.colesterol) : 0,
+        colesterol_hdl: formData.colesterol_hdl ? parseFloat(formData.colesterol_hdl) : 0,
+        colesterol_ldl: formData.colesterol_ldl ? parseFloat(formData.colesterol_ldl) : 0,
+        trigliceridos: formData.trigliceridos ? parseFloat(formData.trigliceridos) : 0,
+        glucosa: formData.glucosa ? parseFloat(formData.glucosa) : 0,
+        hemoglobina_glicosilada: formData.hemoglobina_glicosilada ? parseFloat(formData.hemoglobina_glicosilada) : 0,
+        cigarrillosDia: parseInt(formData.cigarrillos_dia),
+        anosTabaquismo: parseInt(formData.anos_tabaquismo),
+        actividadFisica: formData.actividad_fisica,
+        antecedentesCardiacos: formData.antecedentes_cardiacos,
         numero_historia: formData.numero_historia,
       }
-      console.log('Datos enviados a predict:', predictionData)
+      console.log('[PredictionForm] Datos enviados a predict:', predictionData)
       const result = await predictionService.predict(predictionData)
+      setPredictionResult({ ...result, ...formData })
+      setShowModal(true)
       onPredict(result)
-    } catch (err) {
-      setError("Error al procesar la predicción. Por favor, intente nuevamente.")
+    } catch (error: any) {
+      setError(error.message || "Error al realizar la predicción. Por favor, intente nuevamente.");
     } finally {
       setLoading(false)
+      console.log('[PredictionForm] Procesamiento finalizado')
     }
   }
 
@@ -101,389 +115,285 @@ export function PredictionForm({ formData, onFormChange, onPredict }: Prediction
       formData.nombre &&
       formData.apellidos &&
       formData.dni &&
-      formData.edad &&
+      formData.fecha_nacimiento &&
       formData.sexo &&
       formData.peso &&
       formData.altura &&
-      formData.presionSistolica &&
-      formData.presionDiastolica &&
+      formData.presion_sistolica &&
+      formData.presion_diastolica &&
       formData.numero_historia
     )
   }
 
   const handleDniBlur = async () => {
     if (formData.dni && formData.dni.length === 8) {
+      setSearchingPatient(true);
+      setError("");
       try {
-        const patients = await patientService.getPatientByDni(formData.dni)
-        const patient = patients.find(p => p.dni === formData.dni)
-        if (patient) {
-          let nombre = patient.nombre || ""
-          let apellidos = patient.apellidos || ""
-          if ((!nombre || !apellidos) && patient.nombre_completo) {
-            const partes = patient.nombre_completo.trim().split(" ")
-            nombre = partes[0] || ""
-            apellidos = partes.slice(1).join(" ") || ""
-          }
-          onFormChange("nombre", nombre)
-          onFormChange("apellidos", apellidos)
-          onFormChange("edad", patient.edad ? String(patient.edad) : "")
-          onFormChange("sexo", patient.sexo || "")
-          onFormChange("numero_historia", patient.numero_historia || "")
-        } else {
-          onFormChange("nombre", "")
-          onFormChange("apellidos", "")
-          onFormChange("edad", "")
-          onFormChange("sexo", "")
-          onFormChange("numero_historia", "")
+        const result = await patientService.getPatientByDniV2(formData.dni);
+        if (result.error) {
+          setError(result.error);
+          // Limpiar todos los campos
+          onFormChange("nombre", "");
+          onFormChange("apellidos", "");
+          onFormChange("fecha_nacimiento", "");
+          onFormChange("sexo", "");
+          onFormChange("numero_historia", "");
+          onFormChange("peso", "");
+          onFormChange("altura", "");
+          return;
         }
-      } catch (e) {
-        onFormChange("nombre", "")
-        onFormChange("apellidos", "")
-        onFormChange("edad", "")
-        onFormChange("sexo", "")
-        onFormChange("numero_historia", "")
+        if (result.exists && result.data) {
+          setError("");
+          const patient = result.data;
+          // Extraer nombre y apellidos del nombre_completo si es necesario
+          let nombre = patient.nombre;
+          let apellidos = patient.apellidos;
+          if (!nombre && patient.nombre_completo) {
+            const partes = patient.nombre_completo.split(' ');
+            nombre = partes[0] || '';
+            apellidos = partes.slice(1).join(' ');
+          }
+          onFormChange("nombre", nombre);
+          onFormChange("apellidos", apellidos);
+          onFormChange("fecha_nacimiento", patient.fecha_nacimiento || "");
+          onFormChange("sexo", patient.sexo || "");
+          onFormChange("numero_historia", patient.numero_historia || "");
+          onFormChange("peso", patient.peso ? String(patient.peso) : "");
+          onFormChange("altura", patient.altura ? String(patient.altura) : "");
+        } else {
+          setError("No se encontró un paciente con ese DNI.");
+          onFormChange("nombre", "");
+          onFormChange("apellidos", "");
+          onFormChange("fecha_nacimiento", "");
+          onFormChange("sexo", "");
+          onFormChange("numero_historia", "");
+          onFormChange("peso", "");
+          onFormChange("altura", "");
+        }
+      } catch (error) {
+        setError("Error al buscar paciente por DNI. Intente nuevamente.");
+        onFormChange("nombre", "");
+        onFormChange("apellidos", "");
+        onFormChange("fecha_nacimiento", "");
+        onFormChange("sexo", "");
+        onFormChange("numero_historia", "");
+        onFormChange("peso", "");
+        onFormChange("altura", "");
+      } finally {
+        setSearchingPatient(false);
       }
     }
   }
 
+  const handlePatientSelect = (patient: Patient) => {
+    onFormChange("nombre", patient.nombre || "")
+    onFormChange("apellidos", patient.apellidos || "")
+    onFormChange("dni", patient.dni || "")
+    onFormChange("fecha_nacimiento", patient.fecha_nacimiento || "")
+    onFormChange("sexo", patient.sexo || "")
+    onFormChange("peso", patient.peso ? String(patient.peso) : "")
+    onFormChange("altura", patient.altura ? String(patient.altura) : "")
+    
+    // Limpiar otros campos
+    onFormChange("presion_sistolica", "")
+    onFormChange("presion_diastolica", "")
+    onFormChange("frecuencia_cardiaca", "")
+    onFormChange("colesterol", "")
+    onFormChange("glucosa", "")
+    onFormChange("cigarrillos_dia", "")
+    onFormChange("anos_tabaquismo", "")
+    onFormChange("actividad_fisica", "")
+    onFormChange("antecedentes_cardiacos", "")
+    onFormChange("diabetes", "")
+    onFormChange("hipertension", "")
+  }
+
   return (
     <TooltipProvider>
-      <Card className="shadow-xl border-0 bg-gradient-to-br from-white to-blue-50">
-        <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Evaluación Cardiovascular
-          </CardTitle>
-          <CardDescription className="text-blue-100">
-            Sistema de análisis predictivo con inteligencia artificial
+      <Card className="shadow-2xl border-0 bg-gradient-to-br from-white to-blue-50 dark:from-gray-900 dark:to-gray-800 dark:bg-gradient-to-br w-full">
+        <CardHeader className="text-center">
+          <CardTitle className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">Formulario de Predicción</CardTitle>
+          <CardDescription className="mt-2 text-lg text-gray-600 dark:text-gray-400">
+            Completa los datos del paciente para predecir el riesgo cardiovascular.
+            <p className="text-sm mt-2">Los campos marcados con <span className="text-red-500">*</span> son necesarios para la predicción del modelo.</p>
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6 p-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Datos personales */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 border-b pb-2">Información Personal</h3>
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <Label htmlFor="nombre" className="text-gray-700 font-medium">
-                    Nombre *
-                  </Label>
-                  <Input
-                    id="nombre"
-                    value={formData.nombre}
-                    onChange={(e) => handleInputChange("nombre", e.target.value)}
-                    placeholder="Nombre del paciente"
-                    className="border-gray-300 focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="apellidos" className="text-gray-700 font-medium">
-                    Apellidos *
-                  </Label>
-                  <Input
-                    id="apellidos"
-                    value={formData.apellidos}
-                    onChange={(e) => handleInputChange("apellidos", e.target.value)}
-                    placeholder="Apellidos del paciente"
-                    className="border-gray-300 focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="dni" className="text-gray-700 font-medium">
-                    DNI *
-                  </Label>
-                  <Input
-                    id="dni"
-                    value={formData.dni}
-                    onChange={(e) => handleInputChange("dni", e.target.value)}
-                    onBlur={handleDniBlur}
-                    placeholder="Número de DNI"
-                    className="border-gray-300 focus:border-blue-500"
-                    required
-                    pattern="[0-9]{8}"
-                    title="Ingrese un DNI válido de 8 dígitos"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edad" className="text-gray-700 font-medium">
-                    Edad *
-                  </Label>
-                  <Input
-                    id="edad"
-                    type="number"
-                    min="18"
-                    max="120"
-                    value={formData.edad}
-                    onChange={(e) => handleInputChange("edad", e.target.value)}
-                    placeholder="Años"
-                    className="border-gray-300 focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="sexo" className="text-gray-700 font-medium">
-                    Sexo *
-                  </Label>
-                  <Select value={formData.sexo} onValueChange={(value) => handleInputChange("sexo", value)} required>
-                    <SelectTrigger className="border-gray-300 focus:border-blue-500">
-                      <SelectValue placeholder="Seleccionar sexo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="M">Masculino</SelectItem>
-                      <SelectItem value="F">Femenino</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="numero_historia" className="text-gray-700 font-medium">
-                  Número de Historia Clínica *
-                </Label>
-                <Input
-                  id="numero_historia"
-                  value={formData.numero_historia}
-                  onChange={(e) => handleInputChange("numero_historia", e.target.value)}
-                  placeholder="Ej. HC12345"
-                  className="border-gray-300 focus:border-blue-500"
-                  required
+        <CardContent className="p-8 md:p-12">
+          {error && (
+            <div className="mb-6 p-3 bg-red-100 text-red-700 rounded-lg text-sm font-medium">
+              {error}
+            </div>
+          )}
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full px-4 md:px-8">
+            {/* Inputs reorganizados en grid, labels alineados a la izquierda y bien asociados, ahora con placeholders */}
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="nombre" className="text-left font-semibold">Nombre <span className="text-red-500">*</span></Label>
+              <Input id="nombre" placeholder="Ej: Jefferson" value={formData.nombre} onChange={e => handleInputChange("nombre", e.target.value)} required disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="apellidos" className="text-left font-semibold">Apellidos <span className="text-red-500">*</span></Label>
+              <Input id="apellidos" placeholder="Ej: Chunga Zapata" value={formData.apellidos} onChange={e => handleInputChange("apellidos", e.target.value)} required disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="dni" className="text-left font-semibold">DNI <span className="text-red-500">*</span></Label>
+              <div className="relative">
+                <Input 
+                  id="dni" 
+                  placeholder="75920737" 
+                  value={formData.dni} 
+                  onChange={e => {
+                    const value = e.target.value;
+                    handleInputChange("dni", value);
+                    // Si el DNI tiene exactamente 8 dígitos, buscar automáticamente
+                    if (value.length === 8) {
+                      setTimeout(() => handleDniBlur(), 500); // Pequeño delay para evitar búsquedas muy frecuentes
+                    }
+                  }} 
+                  onBlur={handleDniBlur}
+                  required 
+                  disabled={loading} 
+                  className={searchingPatient ? "pr-10" : ""}
                 />
+                {searchingPatient && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Medidas antropométricas */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 border-b pb-2">Medidas Antropométricas</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="peso" className="text-gray-700 font-medium">
-                    Peso (kg) *
-                  </Label>
-                  <Input
-                    id="peso"
-                    type="number"
-                    min="30"
-                    max="300"
-                    step="0.1"
-                    value={formData.peso}
-                    onChange={(e) => handleInputChange("peso", e.target.value)}
-                    placeholder="70"
-                    className="border-gray-300 focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="altura" className="text-gray-700 font-medium">
-                    Altura (cm) *
-                  </Label>
-                  <Input
-                    id="altura"
-                    type="number"
-                    min="100"
-                    max="250"
-                    value={formData.altura}
-                    onChange={(e) => handleInputChange("altura", e.target.value)}
-                    placeholder="170"
-                    className="border-gray-300 focus:border-blue-500"
-                    required
-                  />
-                </div>
-              </div>
-              {/* IMC en tiempo real */}
-              <div className="mt-2">
-                <div className="inline-block px-4 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 shadow text-sm">
-                  <span className="font-semibold text-gray-800 dark:text-white">IMC: </span>
-                  <span className="font-bold text-lg">
-                    {imc ? imc.toFixed(2) : "N/A"}
-                  </span>
-                  {imc && (
-                    <span className={`ml-3 font-semibold ${getIMCCategory(imc).color}`}>{getIMCCategory(imc).label}</span>
-                  )}
-                </div>
-              </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="fecha_nacimiento" className="text-left font-semibold">Fecha de Nacimiento <span className="text-red-500">*</span></Label>
+              <Input id="fecha_nacimiento" type="date" placeholder="2000-09-30" value={formData.fecha_nacimiento} onChange={e => handleInputChange("fecha_nacimiento", e.target.value)} required disabled={loading} />
             </div>
-
-            {/* Parámetros clínicos */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 border-b pb-2">Parámetros Clínicos</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div>
-                      <Label htmlFor="presionSistolica" className="text-gray-700 font-medium">
-                        Presión Sistólica *
-                      </Label>
-                      <Input
-                        id="presionSistolica"
-                        type="number"
-                        min="70"
-                        max="250"
-                        value={formData.presionSistolica}
-                        onChange={(e) => handleInputChange("presionSistolica", e.target.value)}
-                        placeholder="120"
-                        className="border-gray-300 focus:border-blue-500"
-                        required
-                      />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Presión arterial sistólica normal: 90-120 mmHg</p>
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div>
-                      <Label htmlFor="presionDiastolica" className="text-gray-700 font-medium">
-                        Presión Diastólica *
-                      </Label>
-                      <Input
-                        id="presionDiastolica"
-                        type="number"
-                        min="40"
-                        max="150"
-                        value={formData.presionDiastolica}
-                        onChange={(e) => handleInputChange("presionDiastolica", e.target.value)}
-                        placeholder="80"
-                        className="border-gray-300 focus:border-blue-500"
-                        required
-                      />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Presión arterial diastólica normal: 60-80 mmHg</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="colesterol" className="text-gray-700 font-medium">
-                    Colesterol (mg/dL)
-                  </Label>
-                  <Input
-                    id="colesterol"
-                    type="number"
-                    min="100"
-                    max="500"
-                    value={formData.colesterol}
-                    onChange={(e) => handleInputChange("colesterol", e.target.value)}
-                    placeholder="200"
-                    className="border-gray-300 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="glucosa" className="text-gray-700 font-medium">
-                    Glucosa (mg/dL)
-                  </Label>
-                  <Input
-                    id="glucosa"
-                    type="number"
-                    min="50"
-                    max="400"
-                    value={formData.glucosa}
-                    onChange={(e) => handleInputChange("glucosa", e.target.value)}
-                    placeholder="100"
-                    className="border-gray-300 focus:border-blue-500"
-                  />
-                </div>
-              </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="sexo" className="text-left font-semibold">Sexo <span className="text-red-500">*</span></Label>
+              <Select value={formData.sexo} onValueChange={value => handleInputChange("sexo", value)} disabled={loading}>
+                <SelectTrigger id="sexo">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="M">Masculino</SelectItem>
+                  <SelectItem value="F">Femenino</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-
-            {/* Hábitos */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 border-b pb-2">Hábitos y Estilo de Vida</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="cigarrillosDia" className="text-gray-700 font-medium">
-                    Cigarrillos/día
-                  </Label>
-                  <Input
-                    id="cigarrillosDia"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.cigarrillosDia}
-                    onChange={(e) => handleInputChange("cigarrillosDia", e.target.value)}
-                    placeholder="0"
-                    className="border-gray-300 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="anosTabaquismo" className="text-gray-700 font-medium">
-                    Años fumando
-                  </Label>
-                  <Input
-                    id="anosTabaquismo"
-                    type="number"
-                    min="0"
-                    max="80"
-                    value={formData.anosTabaquismo}
-                    onChange={(e) => handleInputChange("anosTabaquismo", e.target.value)}
-                    placeholder="0"
-                    className="border-gray-300 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="actividadFisica" className="text-gray-700 font-medium">
-                  Actividad Física
-                </Label>
-                <Select
-                  value={formData.actividadFisica}
-                  onValueChange={(value) => handleInputChange("actividadFisica", value)}
-                >
-                  <SelectTrigger className="border-gray-300 focus:border-blue-500">
-                    <SelectValue placeholder="Nivel de actividad física" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sedentario">Sedentario</SelectItem>
-                    <SelectItem value="ligero">Actividad ligera</SelectItem>
-                    <SelectItem value="moderado">Actividad moderada</SelectItem>
-                    <SelectItem value="intenso">Actividad intensa</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="antecedentesCardiacos" className="text-gray-700 font-medium">
-                  Antecedentes Familiares
-                </Label>
-                <Select
-                  value={formData.antecedentesCardiacos}
-                  onValueChange={(value) => handleInputChange("antecedentesCardiacos", value)}
-                >
-                  <SelectTrigger className="border-gray-300 focus:border-blue-500">
-                    <SelectValue placeholder="¿Hay antecedentes familiares?" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="si">Sí</SelectItem>
-                    <SelectItem value="no">No</SelectItem>
-                    <SelectItem value="desconoce">No sabe</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="peso" className="text-left font-semibold">Peso (kg) <span className="text-red-500">*</span></Label>
+              <Input id="peso" placeholder="70" value={formData.peso} onChange={e => handleInputChange("peso", e.target.value)} required disabled={loading} />
             </div>
-
-            {error && <p className="text-red-500 text-center">{error}</p>}
-            <Button
-              type="submit"
-              disabled={loading || !isFormValid()}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg disabled:opacity-50"
-              size="lg"
-            >
-              <Heart className="mr-2 h-5 w-5" />
-              {loading ? "Procesando..." : "Analizar con IA"}
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="altura" className="text-left font-semibold">Altura (cm) <span className="text-red-500">*</span></Label>
+              <Input id="altura" placeholder="170" value={formData.altura} onChange={e => handleInputChange("altura", e.target.value)} required disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="presion_sistolica" className="text-left font-semibold">Presión Sistólica <span className="text-red-500">*</span></Label>
+              <Input id="presion_sistolica" placeholder="120" value={formData.presion_sistolica} onChange={e => handleInputChange("presion_sistolica", e.target.value)} required disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="presion_diastolica" className="text-left font-semibold">Presión Diastólica <span className="text-red-500">*</span></Label>
+              <Input id="presion_diastolica" placeholder="70" value={formData.presion_diastolica} onChange={e => handleInputChange("presion_diastolica", e.target.value)} required disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="frecuencia_cardiaca" className="text-left font-semibold">Frecuencia Cardíaca</Label>
+              <Input id="frecuencia_cardiaca" placeholder="100" value={formData.frecuencia_cardiaca} onChange={e => handleInputChange("frecuencia_cardiaca", e.target.value)} disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="colesterol" className="text-left font-semibold">Colesterol Total <span className="text-red-500">*</span></Label>
+              <Input id="colesterol" placeholder="200" value={formData.colesterol} onChange={e => handleInputChange("colesterol", e.target.value)} disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="colesterol_hdl" className="text-left font-semibold">Colesterol HDL</Label>
+              <Input id="colesterol_hdl" placeholder="50" value={formData.colesterol_hdl} onChange={e => handleInputChange("colesterol_hdl", e.target.value)} disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="colesterol_ldl" className="text-left font-semibold">Colesterol LDL</Label>
+              <Input id="colesterol_ldl" placeholder="100" value={formData.colesterol_ldl} onChange={e => handleInputChange("colesterol_ldl", e.target.value)} disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="trigliceridos" className="text-left font-semibold">Triglicéridos</Label>
+              <Input id="trigliceridos" placeholder="150" value={formData.trigliceridos} onChange={e => handleInputChange("trigliceridos", e.target.value)} disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="glucosa" className="text-left font-semibold">Glucosa <span className="text-red-500">*</span></Label>
+              <Input id="glucosa" placeholder="120.0" value={formData.glucosa} onChange={e => handleInputChange("glucosa", e.target.value)} disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="hemoglobina_glicosilada" className="text-left font-semibold">Hemoglobina Glicosilada (HbA1c)</Label>
+              <Input id="hemoglobina_glicosilada" placeholder="5.7" value={formData.hemoglobina_glicosilada} onChange={e => handleInputChange("hemoglobina_glicosilada", e.target.value)} disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="cigarrillos_dia" className="text-left font-semibold">Cigarrillos por día <span className="text-red-500">*</span></Label>
+              <Input id="cigarrillos_dia" placeholder="0" value={formData.cigarrillos_dia} onChange={e => handleInputChange("cigarrillos_dia", e.target.value)} disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="anos_tabaquismo" className="text-left font-semibold">Años de Tabaquismo <span className="text-red-500">*</span></Label>
+              <Input id="anos_tabaquismo" placeholder="0" value={formData.anos_tabaquismo} onChange={e => handleInputChange("anos_tabaquismo", e.target.value)} disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="actividad_fisica" className="text-left font-semibold">Actividad Física <span className="text-red-500">*</span></Label>
+              <Select value={formData.actividad_fisica} onValueChange={value => handleInputChange("actividad_fisica", value)} disabled={loading}>
+                <SelectTrigger id="actividad_fisica">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sedentario">Sedentario</SelectItem>
+                  <SelectItem value="ligero">Actividad Ligera</SelectItem>
+                  <SelectItem value="moderado">Actividad Moderada</SelectItem>
+                  <SelectItem value="intenso">Actividad Intensa</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="antecedentes_cardiacos" className="text-left font-semibold">Antecedentes Cardíacos</Label>
+              <Select value={formData.antecedentes_cardiacos} onValueChange={value => handleInputChange("antecedentes_cardiacos", value)} disabled={loading}>
+                <SelectTrigger id="antecedentes_cardiacos">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no">No</SelectItem>
+                  <SelectItem value="si">Sí</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="diabetes" className="text-left font-semibold">Diabetes</Label>
+              <Select value={formData.diabetes} onValueChange={value => handleInputChange("diabetes", value)} disabled={loading}>
+                <SelectTrigger id="diabetes">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no">No</SelectItem>
+                  <SelectItem value="si">Sí</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="hipertension" className="text-left font-semibold">Hipertensión</Label>
+              <Select value={formData.hipertension} onValueChange={value => handleInputChange("hipertension", value)} disabled={loading}>
+                <SelectTrigger id="hipertension">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no">No</SelectItem>
+                  <SelectItem value="si">Sí</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="numero_historia" className="text-left font-semibold">N° Historia Clínica</Label>
+              <Input id="numero_historia" placeholder="HC909090" value={formData.numero_historia} onChange={e => handleInputChange("numero_historia", e.target.value)} required disabled={loading} />
+            </div>
+            <div className="col-span-full flex justify-end mt-6">
+              <Button type="submit" disabled={loading || !isFormValid()} className="w-full md:w-auto px-8 py-3 text-lg font-bold rounded-xl bg-[#2563EB] hover:bg-[#1E40AF] text-white shadow-lg transition-all">
+                {loading ? "Procesando..." : "Predecir Riesgo"}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
+      {/* Modal de resultado de predicción */}
+      <PredictionResultModal open={showModal} onClose={() => setShowModal(false)} predictionResult={predictionResult} formData={formData} />
     </TooltipProvider>
   )
 }

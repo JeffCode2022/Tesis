@@ -70,15 +70,83 @@ export function useAuth(requireAuth = true) {
 
   const login = async (email: string, password: string, rememberMe: boolean = false) => {
     try {
-      const response = await authService.login({ email, password, rememberMe })
-      setIsAuthenticated(true)
-      setUser(response.user)
-      console.log('[useAuth] Login exitoso: Estado de autenticación actualizado.', { isAuthenticated: true, user: response.user });
-      window.location.href = "/dashboard"
-      return response
-    } catch (error) {
-      console.error('[useAuth] Error en el login:', error);
-      throw error
+      console.log('[useAuth] Iniciando proceso de login...');
+      
+      // Validar credenciales
+      if (!email || !password) {
+        throw { message: 'Por favor, ingresa tu correo y contraseña', isValidationError: true };
+      }
+
+      const response = await authService.login({ email, password, rememberMe });
+      
+      // Verificar si la respuesta es válida
+      if (!response || !response.user) {
+        throw { message: 'Respuesta del servidor inválida', isServerError: true };
+      }
+
+      console.log('[useAuth] Login exitoso. Actualizando estado...');
+      
+      // Actualizar estado
+      setIsAuthenticated(true);
+      setUser(response.user);
+      
+      console.log('[useAuth] Redirigiendo a /dashboard...');
+      
+      // Usar el router de Next.js para la navegación
+      router.push('/dashboard');
+      
+      return response;
+      
+    } catch (error: any) {
+      // Si el error es de cancelación, no hacer nada
+      if (error?.isCanceled) {
+        console.log('[useAuth] Operación cancelada por el usuario');
+        return;
+      }
+
+      // Formatear el mensaje de error
+      let errorMessage = 'Ocurrió un error al iniciar sesión. Por favor, inténtalo de nuevo.';
+      let errorType = 'UNKNOWN_ERROR';
+
+      // Manejar diferentes tipos de errores
+      if (error?.isNetworkError) {
+        errorMessage = 'No se pudo conectar con el servidor. Por favor, verifica tu conexión a internet.';
+        errorType = 'NETWORK_ERROR';
+      } else if (error?.isTimeout) {
+        errorMessage = 'La solicitud está tardando demasiado. Por favor, verifica tu conexión e inténtalo de nuevo.';
+        errorType = 'TIMEOUT_ERROR';
+      } else if (error?.response?.status === 401) {
+        errorMessage = 'Correo o contraseña incorrectos. Por favor, verifica tus credenciales.';
+        errorType = 'INVALID_CREDENTIALS';
+      } else if (error?.isValidationError) {
+        errorMessage = error.message;
+        errorType = 'VALIDATION_ERROR';
+      } else if (error?.isServerError) {
+        errorMessage = error.message;
+        errorType = 'SERVER_ERROR';
+      } else if (error.response?.data?.message) {
+        // Si el servidor envía un mensaje de error, usarlo
+        errorMessage = error.response.data.message;
+        errorType = error.response.data.code || 'API_ERROR';
+      }
+
+      // Log detallado solo en desarrollo
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[useAuth] Error en el proceso de login:', {
+          error,
+          message: error?.message,
+          code: error?.code,
+          status: error?.response?.status,
+          type: errorType,
+          stack: error?.stack
+        });
+      }
+
+      // Lanzar un error con el mensaje formateado
+      const authError = new Error(errorMessage) as any;
+      authError.type = errorType;
+      
+      throw authError;
     }
   }
 

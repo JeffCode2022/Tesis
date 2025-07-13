@@ -5,7 +5,7 @@ import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 
 interface PredictionResult {
-  riesgo: string
+  riesgo_nivel: string // Cambiado de 'riesgo' a 'riesgo_nivel' para coincidir con el backend
   probabilidad: number
   factores: string[]
   recomendaciones: string[]
@@ -39,25 +39,25 @@ export function PredictionResults({ prediction }: PredictionResultsProps) {
     }
   }
 
-  const colors = getRiskColor(prediction.riesgo || "Desconocido")
+  const colors = getRiskColor(prediction.riesgo_nivel || "Desconocido")
 
   return (
-    <Card className="shadow-2xl border-0 bg-gradient-to-br from-white to-gray-50">
-      <CardHeader className={`text-white rounded-t-lg ${colors.header}`}>
+    <Card className="shadow-2xl border-0 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 dark:bg-gradient-to-br dark:shadow-2xl dark:border-gray-800">
+      <CardHeader className={`text-white rounded-t-lg ${colors.header} dark:from-gray-800 dark:to-gray-900`}>
         <CardTitle className="flex items-center gap-2">
           <AlertTriangle className="h-5 w-5" />
           Resultado del Análisis IA
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-6 space-y-6">
+      <CardContent className="p-6 space-y-6 bg-white/80 dark:bg-gray-900/80 rounded-b-lg">
         <div className="text-center">
-          <Badge variant="outline" className={`text-lg px-6 py-3 border-2 ${colors.badge}`}>
-            Riesgo {prediction.riesgo}
+          <Badge variant="outline" className={`text-lg px-6 py-3 border-2 ${colors.badge} dark:bg-opacity-60 dark:border-opacity-80 dark:text-opacity-90`}>
+            Riesgo {prediction.riesgo_nivel}
           </Badge>
           <div className="mt-6">
-            <div className="text-4xl font-bold mb-3 text-gray-800">{prediction.probabilidad}%</div>
+            <div className="text-4xl font-bold mb-3 text-gray-800 dark:text-white drop-shadow-sm">{prediction.probabilidad}%</div>
             <Progress value={prediction.probabilidad} className={`w-full h-3 ${colors.progress}`} />
-            <p className="text-sm text-gray-600 mt-2">Probabilidad de desarrollar ECV en 10 años</p>
+            <p className="text-sm text-gray-600 mt-2 dark:text-gray-300">Probabilidad de desarrollar ECV en 10 años</p>
           </div>
         </div>
 
@@ -66,12 +66,12 @@ export function PredictionResults({ prediction }: PredictionResultsProps) {
         {/* Factores de riesgo */}
         {(prediction.factores && prediction.factores.length > 0) && (
           <div>
-            <h4 className="font-semibold mb-3 text-gray-800">Factores de Riesgo Identificados:</h4>
+            <h4 className="font-semibold mb-3 text-gray-800 dark:text-white">Factores de Riesgo Identificados:</h4>
             <div className="space-y-2">
               {prediction.factores.map((factor, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg">
+                <div key={index} className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/30 rounded-lg">
                   <AlertTriangle className="h-4 w-4 text-orange-500 flex-shrink-0" />
-                  <span className="text-sm text-orange-800">{factor}</span>
+                  <span className="text-sm text-orange-800 dark:text-orange-200">{factor}</span>
                 </div>
               ))}
             </div>
@@ -83,14 +83,14 @@ export function PredictionResults({ prediction }: PredictionResultsProps) {
         {/* Recomendaciones */}
         {(prediction.recomendaciones && prediction.recomendaciones.length > 0) && (
           <div>
-            <h4 className="font-semibold mb-3 text-gray-800">Recomendaciones Personalizadas:</h4>
+            <h4 className="font-semibold mb-3 text-gray-800 dark:text-white">Recomendaciones Personalizadas:</h4>
             <div className="space-y-2">
               {prediction.recomendaciones.map((recomendacion, index) => (
-                <div key={index} className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
+                <div key={index} className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
                   <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
                     {index + 1}
                   </div>
-                  <span className="text-sm text-blue-800">{recomendacion}</span>
+                  <span className="text-sm text-blue-800 dark:text-blue-200">{recomendacion}</span>
                 </div>
               ))}
             </div>
@@ -100,3 +100,5 @@ export function PredictionResults({ prediction }: PredictionResultsProps) {
     </Card>
   )
 }
+
+export * from './PredictionResultModal'
