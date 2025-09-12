@@ -12,6 +12,7 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: true,
+  timeout: 30000, // 30 segundos timeout
 });
 
 // Interceptor para agregar el token JWT
@@ -25,16 +26,16 @@ api.interceptors.request.use((config) => {
 
 // Función para verificar si un error es de cancelación
 const isCancelError = (error: any) => {
-  return axios.isCancel(error) || 
-         (error && error.message && (
-           error.message.includes('canceled') || 
-           error.message.includes('aborted') ||
-           error.message === 'canceled' ||
-           error.message === 'aborted' ||
-           error.code === 'ECONNABORTED' ||
-           error.name === 'CanceledError' ||
-           error.name === 'AbortError'
-         ));
+  return axios.isCancel(error) ||
+    (error && error.message && (
+      error.message.includes('canceled') ||
+      error.message.includes('aborted') ||
+      error.message === 'canceled' ||
+      error.message === 'aborted' ||
+      error.code === 'ECONNABORTED' ||
+      error.name === 'CanceledError' ||
+      error.name === 'AbortError'
+    ));
 };
 
 // Interceptor para manejar respuestas exitosas
@@ -44,18 +45,18 @@ api.interceptors.response.use(
     if (process.env.NODE_ENV === 'development') {
       console.log('[API] Respuesta exitosa:', {
         status: response.status,
-        url: response.config.url,
-        method: response.config.method,
+        url: response.config?.url,
+        method: response.config?.method?.toUpperCase(),
         data: response.data
       });
     }
-    
+
     // Verificar si la respuesta es válida
     if (!response) {
       console.error('[API] Respuesta vacía recibida');
       throw new Error('No se recibió respuesta del servidor');
     }
-    
+
     return response;
   },
   async (error) => {
@@ -79,9 +80,9 @@ api.interceptors.response.use(
 
       // Verificar si el navegador está offline
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        return Promise.reject({ 
-          isNetworkError: true, 
-          message: 'No hay conexión a internet. Por favor, verifica tu conexión.' 
+        return Promise.reject({
+          isNetworkError: true,
+          message: 'No hay conexión a internet. Por favor, verifica tu conexión.'
         });
       }
 
@@ -98,7 +99,7 @@ api.interceptors.response.use(
         timeout: error.config?.timeout,
         message: error.message
       });
-      
+
       return Promise.reject({
         isTimeout: true,
         message: 'La solicitud está tardando demasiado. Por favor, verifica tu conexión e inténtalo de nuevo.'
@@ -121,14 +122,14 @@ api.interceptors.response.use(
           withCredentials: error.config?.withCredentials
         }
       };
-      
+
       console.error('[API] Error en la petición:', errorDetails);
     }
 
     // Manejar error 401 (No autorizado)
-    if (error.response.status === 401) {
+    if (error.response?.status === 401) {
       // Evitar bucle infinito si ya estamos intentando refrescar el token
-      if (error.config.url?.includes('/token/refresh/')) {
+      if (error.config?.url?.includes('/token/refresh/')) {
         console.log('[API] Error al refrescar el token, redirigiendo a login');
         clearAuthData();
         if (typeof window !== 'undefined') {
@@ -145,11 +146,13 @@ api.interceptors.response.use(
           const response = await api.post('/api/authentication/token/refresh/', {
             refresh: refreshToken,
           });
-          
-          if (response.data.access) {
+
+          if (response.data?.access) {
             console.log('[API] Token refrescado exitosamente');
             localStorage.setItem('auth_token', response.data.access);
-            error.config.headers.Authorization = `Bearer ${response.data.access}`;
+            if (error.config?.headers) {
+              error.config.headers.Authorization = `Bearer ${response.data.access}`;
+            }
             return api(error.config);
           }
         }

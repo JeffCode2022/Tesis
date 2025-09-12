@@ -1,0 +1,23 @@
+{
+  "model_path": "c:\\Users\\CHUNGA\\Desktop\\SISTEMA DE PREDICTION\\backend\\ml_models\\trained_models\\cardiovascular_model.joblib",
+  "scaler_path": "c:\\Users\\CHUNGA\\Desktop\\SISTEMA DE PREDICTION\\backend\\ml_models\\trained_models\\scaler.pkl",
+  "input_sample": [
+    [
+      55.0,
+      28.0,
+      140.0,
+      90.0,
+      220.0,
+      110.0,
+      5.0,
+      1.0,
+      1.0,
+      0.0
+    ]
+  ],
+  "probs": [
+    0.8396318162815058,
+    0.1603681837184943
+  ],
+  "pred_label": 0
+}

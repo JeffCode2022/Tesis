@@ -41,13 +41,13 @@ export function Sidebar({ activeSection, setActiveSection, userName, patientsCou
   const [searchValue, setSearchValue] = useState("")
 
   const menuItems = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "patients", label: "Pacientes", icon: Users, badge: patientsCount },
     { id: "predictions", label: "Predicciones", icon: Activity },
     { id: "import", label: "Importar Datos", icon: Database },
-    { id: "reports", label: "Reportes", icon: FileText, href: "#", badge: reportsCount },
-    { id: "analytics", label: "Analíticas", icon: BarChart3, href: "#" },
-    { id: "settings", label: "Configuración", icon: Settings, href: "#" },
+    { id: "reports", label: "Reportes", icon: FileText, badge: reportsCount },
+    { id: "analytics", label: "Analíticas", icon: BarChart3 },
+    { id: "settings", label: "Configuración", icon: Settings },
   ]
 
   return (
@@ -102,13 +102,7 @@ export function Sidebar({ activeSection, setActiveSection, userName, patientsCou
             return (
               <button
                 key={item.id}
-                onClick={() => {
-                  if (item.href && item.href !== pathname) {
-                    router.push(item.href)
-                  } else {
-                    setActiveSection(item.id)
-                  }
-                }}
+                onClick={() => setActiveSection(item.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-left ${
                   activeSection === item.id
                     ? "bg-blue-500 text-white shadow-lg"

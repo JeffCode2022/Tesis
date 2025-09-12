@@ -24,7 +24,7 @@ export const withRetry = async <T>(
       return await request();
     } catch (error) {
       lastError = error as Error;
-      
+
       if (i === finalConfig.retries) {
         break;
       }
@@ -38,7 +38,7 @@ export const withRetry = async <T>(
       }
 
       // Esperar antes del siguiente intento
-      await new Promise(resolve => 
+      await new Promise(resolve =>
         setTimeout(resolve, finalConfig.retryDelay * Math.pow(2, i))
       );
     }
@@ -55,13 +55,29 @@ export const setupRetryInterceptor = (axiosInstance: AxiosInstance, config: Part
     response => response,
     async error => {
       const axiosError = error as AxiosError;
-      
+      const originalConfig = axiosError.config as AxiosRequestConfig & { _retryCount?: number };
+
+      // Evitar bucles infinitos
+      if (!originalConfig || originalConfig._retryCount! >= finalConfig.retries) {
+        return Promise.reject(error);
+      }
+
+      // Solo reintentar para códigos de estado específicos y errores de red
       if (
-        axiosError.response &&
-        finalConfig.retryableStatusCodes.includes(axiosError.response.status)
+        (axiosError.response && finalConfig.retryableStatusCodes.includes(axiosError.response.status)) ||
+        (axiosError.code === 'ERR_NETWORK' || axiosError.code === 'ECONNABORTED')
       ) {
-        const config = axiosError.config as AxiosRequestConfig;
-        return withRetry(() => axiosInstance(config), finalConfig);
+        originalConfig._retryCount = originalConfig._retryCount || 0;
+        originalConfig._retryCount++;
+
+        console.log(`[Retry] Intento ${originalConfig._retryCount} para ${originalConfig.url}`);
+
+        // Esperar antes del reintento
+        await new Promise(resolve =>
+          setTimeout(resolve, finalConfig.retryDelay * Math.pow(2, originalConfig._retryCount! - 1))
+        );
+
+        return axiosInstance(originalConfig);
       }
 
       return Promise.reject(error);

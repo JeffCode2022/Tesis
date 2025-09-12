@@ -84,16 +84,43 @@ export const patientService = {
       if (search) {
         url += `&search=${encodeURIComponent(search)}`
       }
-      
+
+      console.log(`[patientService] Solicitando: ${url}`)
+
       const response = await api.get<PaginatedPatientsResponse>(url)
+
+      if (!response.data) {
+        throw new Error('No se recibieron datos del servidor')
+      }
+
       const patients = response.data.results || []
       const total = response.data.count || 0
       const totalPages = Math.ceil(total / pageSize)
-      
+
       console.log(`[patientService] Página ${page}: ${patients.length} pacientes de ${total} totales`)
       return { patients, total, totalPages }
-    } catch (error) {
-      console.error('Error obteniendo pacientes:', error)
+    } catch (error: any) {
+      console.error('[patientService] Error obteniendo pacientes:', error)
+
+      // Si es un error de red o timeout
+      if (error.isNetworkError) {
+        throw new Error('Sin conexión al servidor. Verifica tu conexión a internet.')
+      }
+
+      if (error.isTimeout) {
+        throw new Error('La solicitud tardó demasiado. Inténtalo de nuevo.')
+      }
+
+      // Si es un error HTTP específico
+      if (error.response?.status === 404) {
+        throw new Error('El endpoint de pacientes no está disponible.')
+      }
+
+      if (error.response?.status === 500) {
+        throw new Error('Error del servidor. Inténtalo más tarde.')
+      }
+
+      // Error genérico
       throw error instanceof Error ? error : new Error('Error al obtener la lista de pacientes')
     }
   },
@@ -104,7 +131,7 @@ export const patientService = {
       // Usar el nuevo parámetro que deshabilita la paginación en el backend
       const response = await api.get<Patient[]>('/api/patients/?no_pagination=true');
       const allPatients = response.data || [];
-      
+
       console.log(`[patientService] Obtenidos ${allPatients.length} pacientes totales en una sola petición.`);
       return allPatients;
     } catch (error) {
@@ -128,7 +155,7 @@ export const patientService = {
     try {
       const response = await api.get<Patient>(`/api/patients/${id}/`);
       const patientData = response.data;
-      
+
       // Obtener la última predicción para este paciente
       const latestPredictionPromise = predictionService.getLatestPredictionForPatient(id);
 
@@ -143,28 +170,28 @@ export const patientService = {
       // Función helper para extraer el nivel de riesgo
       const extractRiskLevel = (riskData: any): string | null => {
         if (!riskData) return null;
-        
+
         // Si es un string, devolverlo directamente
         if (typeof riskData === 'string') return riskData;
-        
+
         // Si es un objeto, buscar el campo riesgo_nivel
         if (typeof riskData === 'object' && riskData.riesgo_nivel) {
           return riskData.riesgo_nivel;
         }
-        
+
         return null;
       };
 
       console.log('getPatient - patientData:', patientData);
       console.log('getPatient - latestPrediction:', latestPrediction);
       console.log('getPatient - riesgo_actual original:', patientData.riesgo_actual);
-      
+
       const riesgoActual = extractRiskLevel(patientData.riesgo_actual);
       const riesgoFromPrediction = extractRiskLevel(latestPrediction);
-      
+
       console.log('getPatient - riesgo_actual extraído:', riesgoActual);
       console.log('getPatient - riesgo de predicción:', riesgoFromPrediction);
-      
+
       return {
         ...patientData,
         probabilidad: latestPrediction?.probabilidad ?? patientData.probabilidad,
@@ -182,13 +209,63 @@ export const patientService = {
     try {
       console.log(`[getLatestMedicalRecordForPatient] Buscando registros médicos para paciente: ${patientId}`);
       // Usar el endpoint del historial médico del paciente que ya existe
-      const response = await api.get<MedicalRecord[]>(`/api/patients/${patientId}/medical_history/`);
+      const response = await api.get<{
+        patient_id: string;
+        patient_name: string;
+        medical_records: MedicalRecord[];
+        total_records: number;
+      }>(`/api/patients/${patientId}/medical_history/`);
       console.log(`[getLatestMedicalRecordForPatient] Respuesta:`, response.data);
-      console.log(`[getLatestMedicalRecordForPatient] Cantidad de registros encontrados:`, response.data.length);
-      // Retornar el registro más reciente (el primero del array)
-      return response.data.length > 0 ? response.data[0] : null;
+      console.log(`[getLatestMedicalRecordForPatient] Cantidad de registros encontrados:`, response.data.medical_records?.length || 0);
+      // Retornar el registro más reciente (el primero del array medical_records)
+      return response.data.medical_records && response.data.medical_records.length > 0
+        ? response.data.medical_records[0]
+        : null;
     } catch (error) {
       console.error(`Error obteniendo el último registro médico para el paciente ${patientId}:`, error);
+      return null;
+    }
+  },
+
+  async getPatientCompleteInfo(dni: string): Promise<{
+    patient: Patient;
+    medicalRecord: MedicalRecord | null;
+    medicalHistory: MedicalRecord[];
+  } | null> {
+    try {
+      console.log(`[getPatientCompleteInfo] Obteniendo información completa del paciente con DNI: ${dni}`);
+      
+      // Primero buscar el paciente por DNI
+      const patients = await this.getPatientByDni(dni);
+      if (patients.length === 0) {
+        console.log(`[getPatientCompleteInfo] No se encontró paciente con DNI: ${dni}`);
+        return null;
+      }
+      
+      const patient = patients[0];
+      console.log(`[getPatientCompleteInfo] Paciente encontrado:`, patient);
+      
+      // Obtener el registro médico más reciente
+      const latestMedicalRecord = await this.getLatestMedicalRecordForPatient(patient.id);
+      console.log(`[getPatientCompleteInfo] Registro médico más reciente:`, latestMedicalRecord);
+      
+      // Obtener historial médico completo
+      const medicalHistoryResponse = await api.get<{
+        patient_id: string;
+        patient_name: string;
+        medical_records: MedicalRecord[];
+        total_records: number;
+      }>(`/api/patients/${patient.id}/medical_history/`);
+      const medicalHistory = medicalHistoryResponse.data.medical_records || [];
+      console.log(`[getPatientCompleteInfo] Historial médico completo (${medicalHistory.length} registros)`);
+      
+      return {
+        patient,
+        medicalRecord: latestMedicalRecord,
+        medicalHistory
+      };
+    } catch (error) {
+      console.error(`[getPatientCompleteInfo] Error obteniendo información completa del paciente ${dni}:`, error);
       return null;
     }
   },
@@ -209,7 +286,7 @@ export const patientService = {
       console.log('[patientService.updatePatient] Actualizando paciente ID:', id);
       console.log('[patientService.updatePatient] Datos a enviar:', data);
       console.log('[patientService.updatePatient] Tipo de datos:', typeof data);
-      
+
       const response = await api.patch<Patient>(`/api/patients/${id}/`, data);
       console.log('[patientService.updatePatient] Respuesta exitosa:', response.data);
       return response.data;
@@ -241,23 +318,15 @@ export const patientService = {
     try {
       console.log('[patientService.createOrUpdate] Iniciando createOrUpdate con DNI:', data.dni);
       console.log('[patientService.createOrUpdate] Datos completos:', data);
-      
+
       // Usar getPatientByDni para ser más eficiente
       const existingPatients = await this.getPatientByDni(data.dni);
       console.log('[patientService.createOrUpdate] Pacientes existentes encontrados:', existingPatients.length);
-      
+
       // Nueva lógica: usa getPatientByDniV2 para evitar problemas con duplicados
       const result = await this.getPatientByDniV2(data.dni);
       if (result.error) {
-        throw new Error(result.error);
-      }
-      if (result.exists && result.data) {
-        // Actualizar paciente existente
-        const patientToUpdate = result.data;
-        console.log(`[createOrUpdate] Paciente existente encontrado con DNI ${data.dni}. Actualizando ID: ${patientToUpdate.id}`);
-        return await this.updatePatient(patientToUpdate.id, data);
-      } else {
-        // Si no existe, crear uno nuevo
+        // Si hay error, significa que el paciente no existe, crear uno nuevo
         console.log(`[createOrUpdate] No se encontró paciente con DNI ${data.dni}. Creando nuevo paciente.`);
         // Validar campos obligatorios antes de crear
         const requiredFields = ['dni', 'nombre', 'apellidos', 'fecha_nacimiento', 'sexo'];
@@ -267,6 +336,11 @@ export const patientService = {
           }
         }
         return await this.createPatient(data);
+      } else {
+        // Si no hay error, significa que el paciente existe, actualizar
+        const patientToUpdate = result;
+        console.log(`[createOrUpdate] Paciente existente encontrado con DNI ${data.dni}. Actualizando ID: ${patientToUpdate.id}`);
+        return await this.updatePatient(patientToUpdate.id, data);
       }
     } catch (error: any) {
       console.error('[patientService.createOrUpdate] Error completo:', error);
@@ -293,23 +367,23 @@ export const patientService = {
   async updateMedicalRecord(recordId: string, data: Partial<Omit<MedicalRecord, 'id' | 'patient' | 'created_at' | 'fecha_registro' | 'presion_arterial' | 'indice_paquetes_ano' | 'riesgo_diabetes'>>, patientId?: string): Promise<MedicalRecord> {
     try {
       console.log(`[updateMedicalRecord] Actualizando registro ${recordId} con datos:`, data);
-      
+
       // Usar la ruta base para registros médicos
       const url = `/api/patients/medical-records/${recordId}/`;
-      
+
       // Crear una copia de los datos sin el campo patient, ya que es de solo lectura
       const { patient, ...updateData } = data as any;
-      
+
       console.log(`[updateMedicalRecord] URL de la petición:`, url);
       console.log(`[updateMedicalRecord] Datos a enviar:`, updateData);
-      
+
       const response = await api.patch<MedicalRecord>(url, updateData);
-      
+
       console.log(`[updateMedicalRecord] Respuesta:`, response.data);
       return response.data;
     } catch (error: unknown) {
       console.error('Error actualizando registro médico:', error);
-      
+
       // Log detallado del error
       if (error && typeof error === 'object' && 'response' in error) {
         const axiosError = error as any;
@@ -322,7 +396,7 @@ export const patientService = {
           requestData: axiosError.config?.data
         });
       }
-      
+
       // Manejo de errores tipado de manera segura
       if (error && typeof error === 'object') {
         const axiosError = error as {
@@ -333,7 +407,7 @@ export const patientService = {
           };
           [key: string]: any;
         };
-        
+
         if (axiosError.response) {
           console.error('[updateMedicalRecord] Status:', axiosError.response.status);
           if (axiosError.response.data) {
@@ -342,7 +416,7 @@ export const patientService = {
           }
         }
       }
-      
+
       throw error instanceof Error ? error : new Error('Error al actualizar el registro médico');
     }
   },
@@ -362,28 +436,28 @@ export const patientService = {
   async createOrUpdateMedicalRecord(patientId: string, data: Omit<MedicalRecord, 'id' | 'patient' | 'created_at' | 'fecha_registro' | 'presion_arterial' | 'indice_paquetes_ano' | 'riesgo_diabetes'>): Promise<MedicalRecord> {
     try {
       console.log('[createOrUpdateMedicalRecord] Datos recibidos:', data);
-      
+
       // Definir el tipo para los campos requeridos
       type RequiredFields = 'presion_sistolica' | 'presion_diastolica' | 'cigarrillos_dia' | 'anos_tabaquismo' | 'actividad_fisica' | 'antecedentes_cardiacos';
-      
+
       // Validar campos obligatorios
       const requiredFields: RequiredFields[] = [
-        'presion_sistolica', 
-        'presion_diastolica', 
-        'cigarrillos_dia', 
-        'anos_tabaquismo', 
-        'actividad_fisica', 
+        'presion_sistolica',
+        'presion_diastolica',
+        'cigarrillos_dia',
+        'anos_tabaquismo',
+        'actividad_fisica',
         'antecedentes_cardiacos'
       ];
-      
-      const missingFields = requiredFields.filter(field => 
+
+      const missingFields = requiredFields.filter(field =>
         data[field] === undefined || data[field] === null || data[field] === ''
       ) as string[];
-      
+
       if (missingFields.length > 0) {
         throw new Error(`Faltan campos obligatorios: ${missingFields.join(', ')}`);
       }
-      
+
       // Crear un tipo seguro para los datos procesados
       type ProcessedData = Omit<MedicalRecord, 'id' | 'patient' | 'created_at' | 'fecha_registro' | 'presion_arterial' | 'indice_paquetes_ano' | 'riesgo_diabetes'> & {
         presion_sistolica: number;
@@ -393,7 +467,7 @@ export const patientService = {
         actividad_fisica: string;
         antecedentes_cardiacos: string;
       };
-      
+
       // Asegurar que los valores numéricos sean números
       const processedData: ProcessedData = {
         ...data,
@@ -417,24 +491,24 @@ export const patientService = {
         alergias: data.alergias || [],
         observaciones: data.observaciones || ''
       };
-      
+
       console.log('[createOrUpdateMedicalRecord] Datos procesados:', processedData);
-      
+
       // Buscar el registro médico más reciente del paciente
       const latestRecord = await this.getLatestMedicalRecordForPatient(patientId);
-      
+
       if (latestRecord) {
         // Si existe un registro reciente (menos de 1 hora), actualizarlo con los nuevos datos
         const recordDate = new Date(latestRecord.fecha_registro);
         const now = new Date();
         const hoursDiff = (now.getTime() - recordDate.getTime()) / (1000 * 60 * 60);
-        
+
         if (hoursDiff < 1) {
           console.log(`[createOrUpdateMedicalRecord] Actualizando registro médico existente ID: ${latestRecord.id} (${hoursDiff.toFixed(2)} horas de antigüedad)`);
           return await this.updateMedicalRecord(latestRecord.id, processedData, patientId);
         }
       }
-      
+
       // Si no hay registro reciente o es muy antiguo, crear uno nuevo
       console.log(`[createOrUpdateMedicalRecord] Creando nuevo registro médico para paciente ID: ${patientId}`);
       return await this.createMedicalRecord(patientId, processedData);

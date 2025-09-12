@@ -1,600 +1,591 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PatientDetailsModal } from "@/components/patient-details-modal"
 import { patientService, type Patient, type MedicalRecord } from "@/lib/services/patients"
-import { predictionService } from "@/lib/services/predictions"
 import {
-  User, Heart, Activity, Calendar, Eye, ChevronLeft, ChevronRight, 
-  Search, Filter, RefreshCw, Stethoscope, 
-  HeartPulse, AlertTriangle, ShieldCheck, Users
-} from "lucide-react";
-import { Input } from "@/components/ui/input"
+  Search, Filter, Download, RefreshCw, ChevronLeft, ChevronRight,
+  User, Heart, Activity, Calendar, Eye, Users, TrendingUp, AlertTriangle
+} from "lucide-react"
 
 interface PatientsListProps {
   importedPatients?: any[]
   onError?: (errorMessage: string) => void
+  searchQuery?: string
+  onPredictAgain?: (patient: Patient, medicalRecord?: any) => void
 }
 
-// Estado de carga
-function LoadingState() {
+// Estadísticas minimalistas sin colores
+function MinimalStats({ stats }: { stats: any }) {
   return (
-    <div className="relative">
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-[300px] h-[300px] bg-[#2563EB]/20 rounded-full blur-3xl opacity-60"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-[200px] h-[200px] bg-white/30 dark:bg-gray-900/30 rounded-full blur-2xl"></div>
-      </div>
-      <div className="relative z-10 min-h-[400px] flex flex-col items-center justify-center bg-white/70 dark:bg-gray-900/80 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/30 dark:border-gray-700 p-12">
-        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-3xl pointer-events-none"></div>
-        <div className="relative z-10 text-center">
-          <div className="w-16 h-16 bg-[#2563EB] rounded-full flex items-center justify-center shadow-lg mb-6 mx-auto animate-pulse">
-            <HeartPulse className="w-8 h-8 text-white fill-white" />
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <Card className="border border-gray-200 dark:border-gray-700">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Alto Riesgo</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats?.alto || 0}</p>
+            </div>
+            <AlertTriangle className="h-5 w-5 text-gray-400" />
           </div>
-          <span className="text-xl font-semibold text-gray-800">Cargando pacientes...</span>
-          <p className="text-gray-600 mt-2">Obteniendo datos del sistema CardioPredict</p>
-          <div className="mt-4 text-sm text-gray-500">
-            <div className="animate-pulse">Cargando página actual...</div>
+        </CardContent>
+      </Card>
+
+      <Card className="border border-gray-200 dark:border-gray-700">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Riesgo Medio</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats?.medio || 0}</p>
+            </div>
+            <Activity className="h-5 w-5 text-gray-400" />
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border border-gray-200 dark:border-gray-700">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Bajo Riesgo</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats?.bajo || 4}</p>
+            </div>
+            <TrendingUp className="h-5 w-5 text-gray-400" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border border-gray-200 dark:border-gray-700">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats?.total || 10}</p>
+            </div>
+            <Users className="h-5 w-5 text-gray-400" />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
 
-// Estado vacío
-function EmptyState() {
-  return (
-    <div className="text-center py-12 bg-white/40 dark:bg-gray-900/40 backdrop-blur-sm rounded-2xl border border-white/50 dark:border-gray-700">
-      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <Users className="w-8 h-8 text-gray-400" />
-      </div>
-      <h3 className="text-lg font-semibold text-gray-700 mb-2">No hay pacientes registrados</h3>
-      <p className="text-gray-500">Los pacientes aparecerán aquí una vez que sean registrados en el sistema.</p>
-    </div>
-  )
-}
-
-// 1. Cabecera mejorada con glassmorphism y gráfico de distribución de riesgo
-function PatientsListHeader({ count, searchTerm, onSearchChange, onReload, riskStats }: { 
-  count: number; 
-  searchTerm: string; 
-  onSearchChange: (value: string) => void;
-  onReload: () => void;
-  riskStats?: { Bajo: number; Medio: number; Alto: number };
+// Barra de herramientas minimalista
+function MinimalToolBar({
+  searchTerm,
+  onSearchChange,
+  onFilterChange,
+  onExport,
+  onRefresh,
+  totalResults
+}: {
+  searchTerm: string
+  onSearchChange: (value: string) => void
+  onFilterChange: (filter: string) => void
+  onExport: () => void
+  onRefresh: () => void
+  totalResults: number
 }) {
   return (
-    <CardHeader className="bg-[#2563EB]/90 dark:bg-gradient-to-br dark:from-[#2563EB]/80 dark:to-gray-900 backdrop-blur-xl rounded-t-3xl text-white shadow-lg p-6 relative overflow-hidden">
-      {/* Fondo glassmorphism */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-[#2563EB]/10 dark:from-gray-900/30 dark:to-[#2563EB]/10 pointer-events-none rounded-t-3xl" />
-      <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#2563EB]/30 backdrop-blur-sm rounded-full flex items-center justify-center">
-            <Users className="w-4 h-4 text-white" />
-          </div>
-          <CardTitle className="text-2xl font-bold drop-shadow">Historial de Pacientes</CardTitle>
-        </div>
-        <div className="flex items-center gap-2 flex-1 justify-end">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+    <Card className="border border-gray-200 dark:border-gray-700 mb-6">
+      <CardContent className="p-4">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+          {/* Barra de búsqueda */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              type="text"
-              placeholder="Buscar pacientes..."
+              placeholder="Buscar por nombre, DNI o historia clínica..."
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-white/20 dark:bg-gray-900/30 backdrop-blur-sm border-white/30 text-white placeholder-white/70 rounded-xl w-64"
+              className="pl-10 border-gray-300 dark:border-gray-600"
             />
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-white/30 text-white bg-white/10 hover:bg-white/20 dark:bg-gray-900/30 dark:hover:bg-gray-900/50 backdrop-blur-sm rounded-xl"
-          >
-            <Filter className="w-4 h-4 mr-2" />
-            Filtros
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onReload}
-            className="border-white/30 text-white bg-white/10 hover:bg-white/20 dark:bg-gray-900/30 dark:hover:bg-gray-900/50 backdrop-blur-sm rounded-xl"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Recargar
-          </Button>
+
+          {/* Filtros y acciones */}
+          <div className="flex items-center gap-2">
+            <Select onValueChange={onFilterChange}>
+              <SelectTrigger className="w-[180px] border-gray-300 dark:border-gray-600">
+                <SelectValue placeholder="Filtrar por riesgo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los pacientes</SelectItem>
+                <SelectItem value="alto">Alto riesgo</SelectItem>
+                <SelectItem value="medio">Riesgo medio</SelectItem>
+                <SelectItem value="bajo">Bajo riesgo</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button variant="outline" size="sm" onClick={onExport} className="border-gray-300 dark:border-gray-600">
+              <Download className="h-4 w-4 mr-2" />
+              Exportar
+            </Button>
+
+            <Button variant="outline" size="sm" onClick={onRefresh} className="border-gray-300 dark:border-gray-600">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Actualizar
+            </Button>
+          </div>
         </div>
-      </div>
-      <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between mt-2">
-        <CardDescription className="text-white/90 text-base drop-shadow">
-          Registro completo de evaluaciones realizadas ({count.toLocaleString()} pacientes)
-        </CardDescription>
-        {/* Gráfico de barras de distribución de riesgo */}
-        {riskStats && (
-          <div className="flex items-end gap-2 mt-2 md:mt-0">
-            {Object.entries(riskStats).map(([nivel, valor]) => (
-              <div key={nivel} className="flex flex-col items-center">
-                <div className={`w-4 rounded-t-lg ${nivel === 'Alto' ? 'bg-red-500' : nivel === 'Medio' ? 'bg-orange-400' : 'bg-green-500'}`} style={{ height: `${20 + valor * 2}px` }} />
-                <span className="text-xs mt-1" style={{ color: nivel === 'Alto' ? '#ef4444' : nivel === 'Medio' ? '#f59e42' : '#22c55e' }}>{nivel}</span>
-              </div>
-            ))}
+
+        {/* Contador de resultados */}
+        {totalResults > 0 && (
+          <div className="mt-3 text-sm text-gray-600 dark:text-gray-400">
+            <span>{totalResults} paciente{totalResults !== 1 ? 's' : ''} encontrado{totalResults !== 1 ? 's' : ''}</span>
           </div>
         )}
-      </div>
-    </CardHeader>
+      </CardContent>
+    </Card>
   )
 }
 
-// 2. Mejorar visual de las tarjetas de paciente (PatientCard)
-// - Más separación, glassmorphism, badges y botón destacado
-function PatientCard({ paciente, onViewDetails, getRiskColor, formatDate }: any) {
-  // Helper para nivel de riesgo
+// Tabla completamente minimalista - solo el porcentaje con color
+function MinimalPatientsTable({
+  patients,
+  onViewDetails,
+  loading
+}: {
+  patients: Patient[]
+  onViewDetails: (patient: Patient) => void
+  loading: boolean
+}) {
+  // Badge de riesgo visual
+  const getRiskBadge = (nivel: string) => {
+    // Capitalizar y mapear color
+    const normalized = nivel ? nivel.charAt(0).toUpperCase() + nivel.slice(1).toLowerCase() : '';
+    const map: any = {
+      'Alto': 'bg-red-100 text-red-700 border-red-300',
+      'Medio': 'bg-orange-100 text-orange-700 border-orange-300',
+      'Bajo': 'bg-green-100 text-green-700 border-green-300',
+    }
+    return (
+      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${map[normalized] || 'bg-gray-100 text-gray-600 border-gray-300'}`}>{normalized}</span>
+    )
+  }
+
+  // Estado visual
+  const getStatus = (patient: any) => {
+    if (patient.estado) return patient.estado
+    if (patient.activo === false) return 'Inactivo'
+    if (patient.riesgo_actual && typeof patient.riesgo_actual === 'string' && patient.riesgo_actual.toLowerCase() === 'alto') return 'Atención'
+    if (patient.riesgo_actual && typeof patient.riesgo_actual === 'string' && patient.riesgo_actual.toLowerCase() === 'bajo') return 'Saludable'
+    return 'Activo'
+  }
+  const getStatusIcon = (estado: string) => {
+    if (estado === 'Activo') return <span className="text-blue-500">🟦</span>
+    if (estado === 'Atención') return <span className="text-orange-500">⚠️</span>
+    if (estado === 'Saludable') return <span className="text-green-500">✔️</span>
+    if (estado === 'Inactivo') return <span className="text-gray-400">⏸️</span>
+    return <span className="text-gray-400">●</span>
+  }
+  const getStatusColor = (estado: string) => {
+    if (estado === 'Activo') return 'text-blue-600'
+    if (estado === 'Atención') return 'text-orange-600'
+    if (estado === 'Saludable') return 'text-green-600'
+    if (estado === 'Inactivo') return 'text-gray-500'
+    return 'text-gray-500'
+  }
+  // Barra de confianza
+  const getBarColor = (percentage: number | null) => {
+    if (percentage === null) return 'bg-gray-200'
+    if (percentage >= 80) return 'bg-green-500'
+    if (percentage >= 60) return 'bg-yellow-400'
+    if (percentage >= 40) return 'bg-pink-400'
+    return 'bg-red-400'
+  }
+
   const extractRiskLevel = (riskData: any): string => {
-    if (!riskData) return "Desconocido";
-    if (typeof riskData === 'string') return riskData;
-    if (typeof riskData === 'object' && riskData.riesgo_nivel) return riskData.riesgo_nivel;
-    return "Desconocido";
-  };
-  const riesgoNivel = extractRiskLevel(paciente.riesgo_actual);
-  const getRiskColorBlock = (nivel: string) => {
-    switch (nivel) {
-      case "Alto": return "bg-red-600 text-white";
-      case "Medio": return "bg-yellow-400 text-gray-900";
-      case "Bajo": return "bg-green-500 text-white";
-      default: return "bg-blue-500 text-white";
-    }
-  };
-  const probabilidad = paciente.probabilidad !== undefined && paciente.probabilidad !== null
-    ? paciente.probabilidad
-    : (paciente.riesgo_actual && typeof paciente.riesgo_actual === 'object' && paciente.riesgo_actual.probabilidad !== undefined)
-      ? paciente.riesgo_actual.probabilidad
-      : null;
-  const imc = paciente.imc !== undefined && paciente.imc !== null ? paciente.imc : "N/A";
-  const edad = paciente.fecha_nacimiento ? new Date().getFullYear() - new Date(paciente.fecha_nacimiento).getFullYear() : "N/A";
-  // Badge de riesgo con color sólido según nivel
-  const getRiskBadgeColor = (nivel: string) => {
-    switch (nivel) {
-      case "Alto": return "bg-red-600 text-white";
-      case "Medio": return "bg-yellow-400 text-gray-900";
-      case "Bajo": return "bg-green-500 text-white";
-      default: return "bg-blue-500 text-white";
-    }
-  };
-  return (
-    <div className="w-full flex items-center justify-between gap-6 px-6 py-5 rounded-2xl shadow-xl bg-white/70 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 backdrop-blur-xl border border-white/20 dark:border-gray-700 mb-4 relative overflow-hidden group">
-      {/* Fondo glassmorphism cardiológico */}
-      <div className="absolute inset-0 bg-gradient-to-r from-[#e0e7ff]/40 via-[#f1f5f9]/60 to-[#f0fdfa]/40 pointer-events-none rounded-2xl" />
-      {/* Avatar e info principal */}
-      <div className="flex items-center gap-5 min-w-0 flex-1 z-10">
-        <div className="relative flex-shrink-0">
-          <div className="h-16 w-16 rounded-full bg-gradient-to-br from-[#2563EB]/30 to-[#22d3ee]/30 flex items-center justify-center border-4 border-[#2563EB]/30 shadow-lg">
-            <span className="text-2xl font-bold text-[#2563EB]">{paciente.nombre_completo ? paciente.nombre_completo.split(" ").map((n: string) => n[0]).join("") : <User className="h-7 w-7 text-[#2563EB]" />}</span>
-          </div>
-          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-sm" />
-        </div>
-        <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <Heart className="w-5 h-5 text-red-500" />
-            <span className="font-bold tracking-wide text-lg text-gray-900 dark:text-white truncate group-hover:text-[#2563EB] transition-colors">{paciente.nombre_completo}</span>
-          </div>
-          <div className="flex items-center gap-4 text-sm text-gray-700 dark:text-gray-300 flex-wrap">
-            <div className="flex items-center gap-1"><User className="w-4 h-4 text-gray-500 dark:text-gray-400" /><span>{edad} años</span></div>
-            <div className="flex items-center gap-1"><Activity className="w-4 h-4 text-blue-500" /><span>IMC: {imc}</span></div>
-          </div>
-          <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400"><Calendar className="w-3 h-3" /><span>{formatDate(paciente.ultimo_registro)}</span></div>
-        </div>
-      </div>
-      {/* Probabilidad y riesgo */}
-      <div className="flex items-center gap-6 flex-shrink-0 z-10">
-        <div className={`flex flex-col items-center justify-center rounded-2xl px-7 py-3 min-w-[110px] ${getRiskColorBlock(riesgoNivel)} shadow-lg`}>
-          <div className="text-3xl font-extrabold drop-shadow flex items-center gap-2">
-            <Stethoscope className="w-6 h-6 text-white/80 mr-1" />
-            {probabilidad !== null ? `${Math.round(probabilidad)}%` : "N/A"}
-          </div>
-          <div className="text-xs text-white/80 font-medium mt-1">Probabilidad</div>
-        </div>
-        <div className={`px-5 py-2 rounded-xl text-base font-bold shadow-md ${getRiskBadgeColor(riesgoNivel)}`}>{riesgoNivel || "Desconocido"}</div>
-        <button
-          onClick={() => onViewDetails(paciente)}
-          className="flex items-center gap-2 px-6 py-2 rounded-xl font-semibold text-white bg-gradient-to-r from-[#2563EB] to-[#1E40AF] hover:from-[#1E40AF] hover:to-[#2563EB] shadow-md transition-all duration-200 focus:ring-2 focus:ring-[#2563EB]/40 focus:outline-none"
-        >
-          <Eye className="w-5 h-5" />
-          Ver Detalles
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// Nuevo estado de carga para el contenido interno
-function ContentLoadingState() {
-  return (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <div className="text-center text-gray-500 dark:text-gray-400">
-        <div className="w-12 h-12 bg-[#2563EB]/20 rounded-full flex items-center justify-center shadow-lg mb-4 mx-auto animate-pulse">
-          <HeartPulse className="w-6 h-6 text-[#2563EB]" />
-        </div>
-        <span className="text-lg font-semibold text-gray-700 dark:text-gray-200">Actualizando...</span>
-        <p className="text-sm">Cargando nuevos datos de pacientes.</p>
-      </div>
-    </div>
-  );
-}
-
-// Componente de paginación
-function Pagination({ currentPage, totalPages, onPageChange }: { currentPage: number; totalPages: number; onPageChange: (page: number) => void }) {
-  const pages = []
-  const maxVisiblePages = 5
-  
-  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
-  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
-  
-  if (endPage - startPage + 1 < maxVisiblePages) {
-    startPage = Math.max(1, endPage - maxVisiblePages + 1)
+    if (!riskData) return "Desconocido"
+    if (typeof riskData === 'string') return riskData
+    if (typeof riskData === 'object' && riskData.riesgo_nivel) return riskData.riesgo_nivel
+    return "Desconocido"
   }
-  
-  for (let i = startPage; i <= endPage; i++) {
-    pages.push(i)
+
+  if (loading) {
+    return (
+      <Card className="border border-gray-200 dark:border-gray-700">
+        <CardContent className="p-8 text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Cargando pacientes...</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (patients.length === 0) {
+    return (
+      <Card className="border border-gray-200 dark:border-gray-700">
+        <CardContent className="p-8 text-center">
+          <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">No se encontraron pacientes</p>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
-    <div className="flex items-center justify-center gap-2 mt-6">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => onPageChange(currentPage - 1)}
-        disabled={currentPage === 1}
-        className="border-[#2563EB]/30 text-[#2563EB] hover:bg-[#2563EB]/10"
-      >
-        <ChevronLeft className="w-4 h-4" />
-        Anterior
-      </Button>
-      
-      {startPage > 1 && (
-        <>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPageChange(1)}
-            className="border-[#2563EB]/30 text-[#2563EB] hover:bg-[#2563EB]/10"
-          >
-            1
-          </Button>
-          {startPage > 2 && <span className="text-gray-500">...</span>}
-        </>
-      )}
-      
-      {pages.map((page) => (
-        <Button
-          key={page}
-          variant={page === currentPage ? "default" : "outline"}
-          size="sm"
-          onClick={() => onPageChange(page)}
-          className={page === currentPage 
-            ? "bg-[#2563EB] text-white" 
-            : "border-[#2563EB]/30 text-[#2563EB] hover:bg-[#2563EB]/10"
-          }
-        >
-          {page}
-        </Button>
-      ))}
-      
-      {endPage < totalPages && (
-        <>
-          {endPage < totalPages - 1 && <span className="text-gray-500">...</span>}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPageChange(totalPages)}
-            className="border-[#2563EB]/30 text-[#2563EB] hover:bg-[#2563EB]/10"
-          >
-            {totalPages}
-          </Button>
-        </>
-      )}
-      
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => onPageChange(currentPage + 1)}
-        disabled={currentPage === totalPages}
-        className="border-[#2563EB]/30 text-[#2563EB] hover:bg-[#2563EB]/10"
-      >
-        Siguiente
-        <ChevronRight className="w-4 h-4" />
-      </Button>
-    </div>
+    <Card className="border border-gray-200 bg-white shadow-lg rounded-xl">
+      <CardHeader className="bg-gray-50 border-b border-gray-200 rounded-t-xl">
+        <CardTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+          <Heart className="w-6 h-6 text-red-500" /> Lista de Pacientes
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200 bg-gray-50">
+                <th className="text-left p-4 font-semibold text-gray-700">Paciente</th>
+                <th className="text-left p-4 font-semibold text-gray-700">Edad</th>
+                <th className="text-left p-4 font-semibold text-gray-700">IMC</th>
+                <th className="text-left p-4 font-semibold text-gray-700">Nivel de Riesgo</th>
+                <th className="text-left p-4 font-semibold text-gray-700">Confianza</th>
+                <th className="text-left p-4 font-semibold text-gray-700">Último Registro</th>
+                <th className="text-left p-4 font-semibold text-gray-700">Estado</th>
+                <th className="text-right p-4 font-semibold text-gray-700">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...patients]
+                .sort((a, b) => {
+                  // Ordenar por último registro descendente
+                  const fechaA = a.ultimo_registro ? new Date(a.ultimo_registro).getTime() : 0;
+                  const fechaB = b.ultimo_registro ? new Date(b.ultimo_registro).getTime() : 0;
+                  return fechaB - fechaA;
+                })
+                .map((patient, index) => {
+                const riesgoNivel = extractRiskLevel(patient.riesgo_actual)
+                const probabilidad = patient.probabilidad !== undefined && patient.probabilidad !== null
+                  ? patient.probabilidad
+                  : (patient.riesgo_actual && typeof patient.riesgo_actual === 'object' && (patient.riesgo_actual as any).probabilidad !== undefined)
+                    ? (patient.riesgo_actual as any).probabilidad
+                    : null
+                const edad = patient.fecha_nacimiento
+                  ? new Date().getFullYear() - new Date(patient.fecha_nacimiento).getFullYear()
+                  : "N/A"
+                const imc = patient.imc !== undefined && patient.imc !== null ? patient.imc : "N/A"
+                const estado = getStatus(patient)
+                return (
+                  <tr key={patient.id || index} className="border-b border-pink-100 hover:bg-pink-100/60 transition-colors">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-pink-200 rounded-full flex items-center justify-center">
+                          <span className="text-base font-bold text-pink-800">
+                            {patient.nombre_completo?.split(' ').map((n:any)=>n[0]).join('').slice(0,2).toUpperCase() || 'P'}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-900 text-base">
+                            {patient.nombre_completo || 'Sin nombre'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            ID: {patient.id}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4 text-gray-700 font-semibold">{edad} años</td>
+                    <td className="p-4 text-gray-700 font-semibold">{imc}</td>
+                    <td className="p-4">{getRiskBadge(riesgoNivel)}</td>
+                    <td className="p-4 min-w-[120px]">
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 h-2 bg-pink-200 rounded-full overflow-hidden">
+                          <div className={`h-2 rounded-full ${getBarColor(probabilidad)}`} style={{ width: probabilidad !== null ? `${probabilidad}%` : '0%' }}></div>
+                        </div>
+                        <span className="text-sm font-bold text-pink-900">{probabilidad !== null ? `${Math.round(probabilidad)}%` : "–"}</span>
+                      </div>
+                    </td>
+                    <td className="p-4 text-gray-500 font-medium">
+                      {patient.ultimo_registro ? new Date(patient.ultimo_registro).toLocaleDateString('es-ES') : "Sin fecha"}
+                    </td>
+                    <td className="p-4">
+                      <span className={`flex items-center gap-1 font-semibold ${getStatusColor(estado)}`}>{getStatusIcon(estado)} {estado}</span>
+                    </td>
+                    <td className="p-4 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onViewDetails(patient)}
+                        className="bg-pink-200/60 text-pink-900 font-bold hover:bg-pink-300/80 px-4 py-2 rounded-full"
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        Ver
+                      </Button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
-const calculateAge = (fechaNacimiento?: string): number => {
-  if (!fechaNacimiento) return 0;
-  const birthDate = new Date(fechaNacimiento);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
-};
+// Paginación minimalista
+function MinimalPagination({
+  currentPage,
+  totalPages,
+  onPageChange
+}: {
+  currentPage: number
+  totalPages: number
+  onPageChange: (page: number) => void
+}) {
+  if (totalPages <= 1) return null
 
-export function PatientsList({ importedPatients = [], onError }: PatientsListProps) {
+  const getVisiblePages = () => {
+    const pages = []
+    const maxVisible = 5
+
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2))
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1)
+
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1)
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i)
+    }
+
+    return pages
+  }
+
+  return (
+    <Card className="border border-gray-200 dark:border-gray-700 mt-6">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Página {currentPage} de {totalPages}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(currentPage - 1)}
+              disabled={currentPage <= 1}
+              className="border-gray-300 dark:border-gray-600"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Anterior
+            </Button>
+
+            {getVisiblePages().map((page) => (
+              <Button
+                key={page}
+                variant={currentPage === page ? "default" : "outline"}
+                size="sm"
+                onClick={() => onPageChange(page)}
+                className={currentPage === page
+                  ? "bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:hover:bg-gray-200 dark:text-gray-900"
+                  : "border-gray-300 dark:border-gray-600"
+                }
+              >
+                {page}
+              </Button>
+            ))}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+              className="border-gray-300 dark:border-gray-600"
+            >
+              Siguiente
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function PatientsList({ importedPatients = [], onError, searchQuery = "", onPredictAgain }: PatientsListProps) {
   const [patients, setPatients] = useState<Patient[]>([])
   const [loading, setLoading] = useState(true)
-  const [isInitialLoad, setIsInitialLoad] = useState(true) // Nuevo estado para la carga inicial
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalPatients, setTotalPatients] = useState(0)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [patientsPerPage] = useState(50)
+  const [searchTerm, setSearchTerm] = useState(searchQuery)
+  const [riskFilter, setRiskFilter] = useState("todos")
   const [selectedMedicalRecord, setSelectedMedicalRecord] = useState<MedicalRecord | null>(null)
+  const [selectedMedicalHistory, setSelectedMedicalHistory] = useState<MedicalRecord[]>([])
 
-  // Cargar pacientes de la página actual
+  // Sincronizar searchQuery externo
+  useEffect(() => {
+    setSearchTerm(searchQuery)
+  }, [searchQuery])
+
+  // Cargar pacientes
   useEffect(() => {
     const fetchPatients = async () => {
       setLoading(true)
-      console.log(`[PatientsList] Cargando página ${currentPage} con búsqueda: "${searchTerm}"`)
-      
       try {
         const { patients: pagePatients, total, totalPages: pages } = await patientService.getPatients(
-          currentPage, 
-          patientsPerPage, 
+          currentPage,
+          20,
           searchTerm || undefined
         )
-        
-        console.log(`[PatientsList] Página ${currentPage}: ${pagePatients.length} pacientes de ${total} totales`)
-        
+
         setPatients(pagePatients)
         setTotalPatients(total)
         setTotalPages(pages)
-        
       } catch (error) {
-        console.error('[PatientsList] Error cargando pacientes:', error)
-        setPatients([])
-        onError?.(error instanceof Error ? error.message : "Error al cargar los pacientes")
+        console.error("Error cargando pacientes:", error)
+        onError?.("Error al cargar la lista de pacientes")
       } finally {
         setLoading(false)
-        if (isInitialLoad) {
-          setIsInitialLoad(false)
-        }
       }
     }
-    fetchPatients()
-  }, [currentPage, searchTerm, patientsPerPage, onError, isInitialLoad])
 
-  const allPatients = [...patients, ...(importedPatients || []).slice(0, 5)]
+    fetchPatients()
+  }, [currentPage, searchTerm, onError])
 
   const handleViewDetails = async (patient: Patient) => {
-    // Usar directamente el objeto del listado para el modal
     setSelectedPatient(patient)
-    // Si quieres, puedes seguir trayendo el último registro médico
-    const record = await patientService.getLatestMedicalRecordForPatient(patient.id)
-    setSelectedMedicalRecord(record)
+    try {
+      // Usar la nueva función que obtiene toda la información completa del paciente
+      const completeInfo = await patientService.getPatientCompleteInfo(patient.dni)
+      if (completeInfo) {
+        // Actualizar el paciente seleccionado con la información completa
+        setSelectedPatient(completeInfo.patient)
+        // Usar el registro médico más reciente
+        setSelectedMedicalRecord(completeInfo.medicalRecord)
+        // Almacenar el historial médico completo
+        setSelectedMedicalHistory(completeInfo.medicalHistory || []);
+        console.log(`[handleViewDetails] Información completa cargada para paciente ${patient.dni}:`, {
+          patient: completeInfo.patient,
+          medicalRecord: completeInfo.medicalRecord,
+          historyLength: completeInfo.medicalHistory.length
+        })
+      } else {
+        // Si no se encuentra información completa, usar el método anterior
+        console.log(`[handleViewDetails] No se encontró información completa para ${patient.dni}, usando método alternativo`)
+        const record = await patientService.getLatestMedicalRecordForPatient(patient.id)
+        setSelectedMedicalRecord(record)
+        setSelectedMedicalHistory([])
+      }
+    } catch (error) {
+      console.error("Error obteniendo información completa del paciente:", error)
+      // Intentar con el método alternativo en caso de error
+      try {
+        const record = await patientService.getLatestMedicalRecordForPatient(patient.id)
+        setSelectedMedicalRecord(record)
+        setSelectedMedicalHistory([])
+      } catch (fallbackError) {
+        console.error("Error en método alternativo:", fallbackError)
+        setSelectedMedicalHistory([])
+      }
+    }
     setIsModalOpen(true)
-  }
-
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleSearchChange = (value: string) => {
     setSearchTerm(value)
-    setCurrentPage(1) // Resetear a la primera página cuando se busca
-  }
-
-  const handleReload = () => {
     setCurrentPage(1)
+  }
+
+  const handleFilterChange = (filter: string) => {
+    setRiskFilter(filter)
+    setCurrentPage(1)
+  }
+
+  const handleExport = () => {
+    console.log("Exportar datos...")
+  }
+
+  const handleRefresh = () => {
     setSearchTerm("")
+    setRiskFilter("todos")
+    setCurrentPage(1)
+    window.location.reload()
   }
 
-  const getRiskColor = (riesgo: string | null) => {
-    switch (riesgo) {
-      case "Alto":
-        return "border-red-500 text-red-700 bg-red-50/80 backdrop-blur-sm"
-      case "Medio":
-        return "border-[#2563EB] text-[#2563EB] bg-[#2563EB]/10 backdrop-blur-sm"
-      case "Bajo":
-        return "border-[#2563EB]/60 text-[#2563EB]/80 bg-[#2563EB]/5 backdrop-blur-sm"
-      default:
-        return "border-gray-500 text-gray-700 bg-gray-50/80 backdrop-blur-sm"
-    }
+  const handleSaveContact = async () => {
+    console.log("Contacto guardado")
   }
 
-  const formatDate = (dateString: string): string => {
-    try {
-      const date = new Date(dateString)
-      if (isNaN(date.getTime())) return "N/A"
-      return date.toLocaleDateString("es-ES", { year: "numeric", month: "long", day: "numeric" })
-    } catch {
-      return "N/A"
-    }
+  // Filtrar pacientes por riesgo
+  const filteredPatients = riskFilter === "todos"
+    ? patients
+    : patients.filter(p => {
+      const riskLevel = typeof p.riesgo_actual === 'string'
+        ? p.riesgo_actual.toLowerCase()
+        : (p.riesgo_actual as any)?.riesgo_nivel?.toLowerCase() || 'desconocido'
+      return riskLevel === riskFilter.toLowerCase()
+    })
+
+  // Estadísticas
+  const stats = {
+    alto: patients.filter(p => {
+      const risk = typeof p.riesgo_actual === 'string' ? p.riesgo_actual : (p.riesgo_actual as any)?.riesgo_nivel
+      return risk === 'Alto'
+    }).length,
+    medio: patients.filter(p => {
+      const risk = typeof p.riesgo_actual === 'string' ? p.riesgo_actual : (p.riesgo_actual as any)?.riesgo_nivel
+      return risk === 'Medio'
+    }).length,
+    bajo: patients.filter(p => {
+      const risk = typeof p.riesgo_actual === 'string' ? p.riesgo_actual : (p.riesgo_actual as any)?.riesgo_nivel
+      return risk === 'Bajo'
+    }).length,
+    total: patients.length
   }
-
-  // Función para guardar los datos de contacto editados y medicamentos actuales
-  const handleSaveContact = async (data: any) => {
-    if (!selectedPatient) return;
-    try {
-      // Actualizar datos de contacto del paciente
-      const updated = await patientService.updatePatient(selectedPatient.id, {
-        telefono: data.telefono,
-        email: data.email,
-        direccion: data.direccion,
-      });
-      setSelectedPatient((prev) => prev ? { ...prev, ...updated } : prev);
-      setPatients((prev) => prev.map((p) => p.id === updated.id ? { ...p, ...updated } : p));
-
-      // Actualizar medicamentos actuales en el registro médico más reciente
-      if (selectedMedicalRecord && typeof data.medicamentos_actuales === 'string') {
-        // Convertir a array si es necesario
-        const medicamentosArray = data.medicamentos_actuales
-          .split(',')
-          .map((m: string) => m.trim())
-          .filter((m: string) => m.length > 0);
-        const updatedRecord = await patientService.updateMedicalRecord(selectedMedicalRecord.id, {
-          medicamentos_actuales: medicamentosArray
-        });
-        setSelectedMedicalRecord((prev) => prev ? { ...prev, ...updatedRecord } : prev);
-      }
-    } catch (error) {
-      console.error('Error al guardar información de contacto o medicamentos:', error);
-      throw error;
-    }
-  };
-
-  // Calcular conteo de pacientes por nivel de riesgo (corrección de tipado)
-  const riskCounts = patients.reduce<{
-    alto: number;
-    medio: number;
-    bajo: number;
-    otros: number;
-  }>(
-    (acc, p) => {
-      const nivel = (p.riesgo_actual && typeof p.riesgo_actual === 'object' && (p.riesgo_actual as any).riesgo_nivel)
-        ? (p.riesgo_actual as any).riesgo_nivel.toLowerCase()
-        : 'desconocido';
-      if (nivel === 'alto') acc.alto++;
-      else if (nivel === 'medio') acc.medio++;
-      else if (nivel === 'bajo') acc.bajo++;
-      else acc.otros++;
-      return acc;
-    },
-    { alto: 0, medio: 0, bajo: 0, otros: 0 }
-  );
-
-  // Componente de indicadores flotantes glassmorphism fuera del Card
-  const RiskIndicators = () => (
-    <div className="flex flex-wrap gap-6 mb-10 w-full px-2">
-      <div className="flex-1 min-w-[220px] bg-white dark:bg-gray-900 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border border-white/0 dark:border-gray-900/0 p-8 flex flex-col items-start group cursor-pointer hover:scale-[1.03] hover:-translate-y-1">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="bg-red-500 p-4 rounded-full shadow-sm flex items-center justify-center">
-            <HeartPulse className="h-8 w-8 text-white" />
-          </div>
-          <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100 tracking-wide uppercase ml-1">RIESGO ALTO</h3>
-        </div>
-        <div className="text-5xl font-extrabold text-gray-900 dark:text-white mb-2 drop-shadow-sm">{riskCounts.alto}</div>
-        <div className="text-sm text-gray-400 dark:text-gray-500 font-medium">Pacientes</div>
-      </div>
-      <div className="flex-1 min-w-[220px] bg-white dark:bg-gray-900 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border border-white/0 dark:border-gray-900/0 p-8 flex flex-col items-start group cursor-pointer hover:scale-[1.03] hover:-translate-y-1">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="bg-yellow-400 p-4 rounded-full shadow-sm flex items-center justify-center">
-            <AlertTriangle className="h-8 w-8 text-white" />
-          </div>
-          <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100 tracking-wide uppercase ml-1">RIESGO MEDIO</h3>
-        </div>
-        <div className="text-5xl font-extrabold text-gray-900 dark:text-white mb-2 drop-shadow-sm">{riskCounts.medio}</div>
-        <div className="text-sm text-gray-400 dark:text-gray-500 font-medium">Pacientes</div>
-      </div>
-      <div className="flex-1 min-w-[220px] bg-white dark:bg-gray-900 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border border-white/0 dark:border-gray-900/0 p-8 flex flex-col items-start group cursor-pointer hover:scale-[1.03] hover:-translate-y-1">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="bg-green-500 p-4 rounded-full shadow-sm flex items-center justify-center">
-            <ShieldCheck className="h-8 w-8 text-white" />
-          </div>
-          <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100 tracking-wide uppercase ml-1">RIESGO BAJO</h3>
-        </div>
-        <div className="text-5xl font-extrabold text-gray-900 dark:text-white mb-2 drop-shadow-sm">{riskCounts.bajo}</div>
-        <div className="text-sm text-gray-400 dark:text-gray-500 font-medium">Pacientes</div>
-      </div>
-      <div className="flex-1 min-w-[220px] bg-white dark:bg-gray-900 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border border-white/0 dark:border-gray-900/0 p-8 flex flex-col items-start group cursor-pointer hover:scale-[1.03] hover:-translate-y-1">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="bg-blue-500 p-4 rounded-full shadow-sm flex items-center justify-center">
-            <Users className="h-8 w-8 text-white" />
-          </div>
-          <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100 tracking-wide uppercase ml-1">TOTAL PACIENTES</h3>
-        </div>
-        <div className="text-5xl font-extrabold text-gray-900 dark:text-white mb-2 drop-shadow-sm">{patients.length}</div>
-        <div className="text-sm text-gray-400 dark:text-gray-500 font-medium">Pacientes</div>
-      </div>
-    </div>
-  );
-
-  if (isInitialLoad) return <LoadingState />
 
   return (
-    <div className="relative min-h-screen">
-      {/* Glassmorphism background */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-[#2563EB]/15 rounded-full blur-3xl opacity-60"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-[200px] h-[200px] bg-white/20 dark:bg-gray-900/20 rounded-full blur-2xl"></div>
-        <div className="absolute top-1/2 left-1/2 w-[200px] h-[200px] bg-gray-200/30 rounded-full blur-xl"></div>
-      </div>
-      {/* Indicadores glassmorphism fuera del Card */}
-      <div className="relative z-20 max-w-7xl mx-auto pt-8">
-        <RiskIndicators />
-      </div>
-      <div className="relative z-10 flex justify-center min-h-screen">
-        <div className="w-full max-w-7xl px-4 py-6">
-          <Card className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl shadow-2xl border border-white/30 dark:border-gray-700 rounded-3xl overflow-hidden min-h-[calc(100vh-3rem)] flex flex-col">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
-            <PatientsListHeader 
-              count={totalPatients} 
-              searchTerm={searchTerm}
-              onSearchChange={handleSearchChange}
-              onReload={handleReload}
-            />
-            <CardContent className="relative z-10 p-8 flex-1 overflow-y-auto">
-              {loading ? (
-                <ContentLoadingState />
-              ) : (
-                <div className="space-y-4">
-                  {allPatients.length === 0 ? (
-                    <EmptyState />
-                  ) : (
-                    <>
-                      <div className="grid gap-4">
-                        {allPatients.map((paciente, index) => (
-                          <PatientCard
-                            key={`${paciente.id || index}-${currentPage}-${searchTerm}`}
-                            paciente={paciente}
-                            onViewDetails={handleViewDetails}
-                            getRiskColor={getRiskColor}
-                            formatDate={formatDate}
-                          />
-                        ))}
-                      </div>
-                      
-                      {totalPages > 1 && (
-                        <Pagination
-                          currentPage={currentPage}
-                          totalPages={totalPages}
-                          onPageChange={handlePageChange}
-                        />
-                      )}
-                      
-                      <div className="text-center text-sm text-gray-500 mt-4">
-                        {searchTerm ? (
-                          `Mostrando página ${currentPage} de ${totalPages} - ${totalPatients.toLocaleString()} pacientes encontrados`
-                        ) : (
-                          `Mostrando página ${currentPage} de ${totalPages} - ${totalPatients.toLocaleString()} pacientes totales`
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-      
+    <div className="space-y-6">
+      {/* Estadísticas minimalistas */}
+      <MinimalStats stats={stats} />
+
+      {/* Barra de herramientas */}
+      <MinimalToolBar
+        searchTerm={searchTerm}
+        onSearchChange={handleSearchChange}
+        onFilterChange={handleFilterChange}
+        onExport={handleExport}
+        onRefresh={handleRefresh}
+        totalResults={filteredPatients.length}
+      />
+
+      {/* Tabla de pacientes */}
+      <MinimalPatientsTable
+        patients={filteredPatients}
+        onViewDetails={handleViewDetails}
+        loading={loading}
+      />
+
+      {/* Paginación */}
+      <MinimalPagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+      />
+
+      {/* Modal */}
       <PatientDetailsModal
         patient={selectedPatient}
         medicalRecord={selectedMedicalRecord}
+        medicalHistory={selectedMedicalHistory}
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false)
           setSelectedPatient(null)
           setSelectedMedicalRecord(null)
+          setSelectedMedicalHistory([])
         }}
         onSave={handleSaveContact}
+        onPredictAgain={onPredictAgain}
       />
     </div>
   )
 }
-
-

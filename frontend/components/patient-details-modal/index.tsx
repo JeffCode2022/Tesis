@@ -16,6 +16,7 @@ import {
   Pencil,
   FileText,
   X,
+  RefreshCw,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -28,9 +29,11 @@ import type { MedicalRecord } from "@/lib/services/patients"
 interface PatientDetailsModalProps {
   patient: Patient | null
   medicalRecord: MedicalRecord | null
+  medicalHistory?: MedicalRecord[]
   isOpen: boolean
   onClose: () => void
   onSave?: (data: any) => Promise<void>
+  onPredictAgain?: (patient: Patient, medicalRecord?: MedicalRecord) => void
 }
 
 // Utilidad para parsear arrays o strings tipo '["texto1", "texto2"]'
@@ -47,7 +50,7 @@ function parseArrayField(field: any): string[] {
   return [];
 }
 
-export function PatientDetailsModal({ patient, medicalRecord, isOpen, onClose, onSave }: PatientDetailsModalProps) {
+export function PatientDetailsModal({ patient, medicalRecord, medicalHistory = [], isOpen, onClose, onSave, onPredictAgain }: PatientDetailsModalProps) {
   const [editData, setEditData] = useState<any>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -508,6 +511,26 @@ export function PatientDetailsModal({ patient, medicalRecord, isOpen, onClose, o
                   <span className="text-blue-700 dark:text-blue-300 font-medium">Altura:</span>
                   <div className="text-blue-900 dark:text-blue-100 font-semibold">{altura !== "N/A" ? `${altura} cm` : "N/A"}</div>
                 </div>
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">IMC:</span>
+                  <div className="text-blue-900 dark:text-blue-100 font-semibold">{patient?.imc ? `${patient.imc.toFixed(1)}` : "N/A"}</div>
+                </div>
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Hospital:</span>
+                  <div className="text-blue-900 dark:text-blue-100 font-semibold">{patient?.hospital || "N/A"}</div>
+                </div>
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Médico Tratante:</span>
+                  <div className="text-blue-900 dark:text-blue-100 font-semibold">{patient?.medico_tratante || "N/A"}</div>
+                </div>
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Número de Historia:</span>
+                  <div className="text-blue-900 dark:text-blue-100 font-semibold">{patient?.numero_historia || "N/A"}</div>
+                </div>
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Estado:</span>
+                  <div className="text-blue-900 dark:text-blue-100 font-semibold">{patient?.is_active !== undefined ? (patient.is_active ? "Activo" : "Inactivo") : "N/A"}</div>
+                </div>
               </div>
             </div>
             {/* Datos Clínicos */}
@@ -528,22 +551,178 @@ export function PatientDetailsModal({ patient, medicalRecord, isOpen, onClose, o
                 <div>
                   <span className="text-purple-700 dark:text-purple-300 font-medium">FC:</span>
                   <div className="text-purple-900 dark:text-purple-100 font-semibold">
-                    {medicalRecord?.frecuencia_cardiaca} bpm
+                    {medicalRecord?.frecuencia_cardiaca ? `${medicalRecord.frecuencia_cardiaca} bpm` : "N/A"}
                   </div>
                 </div>
                 <div>
-                  <span className="text-purple-700 dark:text-purple-300 font-medium">Colesterol:</span>
-                  <div className="text-purple-900 dark:text-purple-100 font-semibold">{medicalRecord?.colesterol} mg/dL</div>
+                  <span className="text-purple-700 dark:text-purple-300 font-medium">Colesterol Total:</span>
+                  <div className="text-purple-900 dark:text-purple-100 font-semibold">
+                    {medicalRecord?.colesterol ? `${medicalRecord.colesterol} mg/dL` : "N/A"}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-purple-700 dark:text-purple-300 font-medium">Colesterol HDL:</span>
+                  <div className="text-purple-900 dark:text-purple-100 font-semibold">
+                    {medicalRecord?.colesterol_hdl ? `${medicalRecord.colesterol_hdl} mg/dL` : "N/A"}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-purple-700 dark:text-purple-300 font-medium">Colesterol LDL:</span>
+                  <div className="text-purple-900 dark:text-purple-100 font-semibold">
+                    {medicalRecord?.colesterol_ldl ? `${medicalRecord.colesterol_ldl} mg/dL` : "N/A"}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-purple-700 dark:text-purple-300 font-medium">Triglicéridos:</span>
+                  <div className="text-purple-900 dark:text-purple-100 font-semibold">
+                    {medicalRecord?.trigliceridos ? `${medicalRecord.trigliceridos} mg/dL` : "N/A"}
+                  </div>
                 </div>
                 <div>
                   <span className="text-purple-700 dark:text-purple-300 font-medium">Glucosa:</span>
-                  <div className="text-purple-900 dark:text-purple-100 font-semibold">{medicalRecord?.glucosa} mg/dL</div>
+                  <div className="text-purple-900 dark:text-purple-100 font-semibold">
+                    {medicalRecord?.glucosa ? `${medicalRecord.glucosa} mg/dL` : "N/A"}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-purple-700 dark:text-purple-300 font-medium">HbA1c:</span>
+                  <div className="text-purple-900 dark:text-purple-100 font-semibold">{medicalRecord?.hemoglobina_glicosilada ? `${medicalRecord.hemoglobina_glicosilada}%` : "N/A"}</div>
+                </div>
+                <div>
+                  <span className="text-purple-700 dark:text-purple-300 font-medium">Cigarrillos/día:</span>
+                  <div className="text-purple-900 dark:text-purple-100 font-semibold">{medicalRecord?.cigarrillos_dia || "0"}</div>
+                </div>
+                <div>
+                  <span className="text-purple-700 dark:text-purple-300 font-medium">Índice Paquetes/Año:</span>
+                  <div className="text-purple-900 dark:text-purple-100 font-semibold">{medicalRecord?.indice_paquetes_ano || "N/A"}</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Contacto y Medicamentos (editables) */}
+          {/* Antecedentes Médicos */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center gap-2 mb-3">
+              <Heart className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 uppercase tracking-wide">
+                Antecedentes Médicos
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Hipertensión:</span>
+                  <span className={`text-xs font-medium px-2 py-1 rounded ${
+                    medicalRecord?.hipertension
+                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                      : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                  }`}>
+                    {medicalRecord?.hipertension ? 'Sí' : 'No'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Diabetes:</span>
+                  <span className={`text-xs font-medium px-2 py-1 rounded ${
+                    medicalRecord?.diabetes
+                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                      : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                  }`}>
+                    {medicalRecord?.diabetes ? 'Sí' : 'No'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Actividad Física:</span>
+                  <span className="text-xs font-medium px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                    {medicalRecord?.actividad_fisica || "N/A"}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Antecedentes Cardíacos:</span>
+                  <span className="text-xs font-medium px-2 py-1 rounded bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                    {medicalRecord?.antecedentes_cardiacos || "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Riesgo Diabetes:</span>
+                  <span className={`text-xs font-medium px-2 py-1 rounded ${
+                    medicalRecord?.riesgo_diabetes?.toLowerCase() === 'alto'
+                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                      : medicalRecord?.riesgo_diabetes?.toLowerCase() === 'medio'
+                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                      : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                  }`}>
+                    {medicalRecord?.riesgo_diabetes || "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Años de Tabaquismo:</span>
+                  <span className="text-xs font-medium px-2 py-1 rounded bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+                    {medicalRecord?.anos_tabaquismo || "0"} años
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Información Adicional del Registro Médico */}
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 border border-indigo-200 dark:border-indigo-800">
+            <div className="flex items-center gap-2 mb-3">
+              <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <h3 className="text-sm font-semibold text-indigo-900 dark:text-indigo-100 uppercase tracking-wide">
+                Información del Registro Médico
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Fecha del Registro:</span>
+                  <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                    {medicalRecord?.fecha_registro ? formatDate(medicalRecord.fecha_registro) : "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Presión Arterial:</span>
+                  <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                    {medicalRecord?.presion_arterial || "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Riesgo Diabetes:</span>
+                  <span className={`text-xs font-medium px-2 py-1 rounded ${
+                    medicalRecord?.riesgo_diabetes?.toLowerCase() === 'alto'
+                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                      : medicalRecord?.riesgo_diabetes?.toLowerCase() === 'medio'
+                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                      : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                  }`}>
+                    {medicalRecord?.riesgo_diabetes || "N/A"}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">ID Externo:</span>
+                  <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300 truncate max-w-24" title={medicalRecord?.external_record_id || "N/A"}>
+                    {medicalRecord?.external_record_id || "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Fecha de Creación:</span>
+                  <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                    {medicalRecord?.created_at ? formatDate(medicalRecord.created_at) : "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Índice Paquetes/Año:</span>
+                  <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                    {medicalRecord?.indice_paquetes_ano ? `${medicalRecord.indice_paquetes_ano.toFixed(1)}` : "N/A"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Contacto */}
             <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
@@ -585,18 +764,160 @@ export function PatientDetailsModal({ patient, medicalRecord, isOpen, onClose, o
                   Medicamentos Actuales
                 </h3>
               </div>
-              <Textarea
-                name="medicamentos_actuales"
-                value={editData?.medicamentos_actuales || ""}
-                onChange={handleChange}
-                placeholder="Lista de medicamentos separados por coma"
-                className="text-xs"
-                rows={3}
-              />
+              <div className="space-y-2">
+                {medicalRecord?.medicamentos_actuales && Array.isArray(medicalRecord.medicamentos_actuales) && medicalRecord.medicamentos_actuales.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
+                    {medicalRecord.medicamentos_actuales.map((medicamento, idx) => (
+                      <div key={idx} className="bg-green-100 dark:bg-green-900 px-2 py-1 rounded text-xs border border-green-200 dark:border-green-700">
+                        <span className="text-green-700 dark:text-green-300 font-medium">{medicamento}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-500 italic">No hay medicamentos registrados.</span>
+                )}
+                <Textarea
+                  name="medicamentos_actuales"
+                  value={editData?.medicamentos_actuales || ""}
+                  onChange={handleChange}
+                  placeholder="Lista de medicamentos separados por coma"
+                  className="text-xs mt-2"
+                  rows={2}
+                />
+              </div>
             </div>
           </div>
 
-          {/* Antecedentes Médicos */}
+          {/* Información de Contacto del Paciente */}
+          <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-lg p-4 border border-cyan-200 dark:border-cyan-800">
+            <div className="flex items-center gap-2 mb-3">
+              <Phone className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+              <h3 className="text-sm font-semibold text-cyan-900 dark:text-cyan-100 uppercase tracking-wide">
+                Información de Contacto
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Teléfono:</span>
+                  <span className="text-xs font-medium text-cyan-700 dark:text-cyan-300">
+                    {patient?.telefono || "No registrado"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Email:</span>
+                  <span className="text-xs font-medium text-cyan-700 dark:text-cyan-300">
+                    {patient?.email || "No registrado"}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Dirección:</span>
+                  <span className="text-xs font-medium text-cyan-700 dark:text-cyan-300 max-w-32 truncate" title={patient?.direccion || "No registrada"}>
+                    {patient?.direccion || "No registrada"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">ID Externo:</span>
+                  <span className="text-xs font-medium text-cyan-700 dark:text-cyan-300">
+                    {patient?.external_patient_id || "N/A"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Datos Externos (si existen) */}
+          {(patient?.external_system_data || medicalRecord?.external_data) && (
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
+                  Datos de Sistemas Externos
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {patient?.external_system_data && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Datos del Paciente (Sistema Externo):</h4>
+                    <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 p-2 rounded border max-h-20 overflow-y-auto">
+                      {typeof patient.external_system_data === 'object' && patient.external_system_data !== null ? (
+                        <div className="space-y-1">
+                          {Object.entries(patient.external_system_data).map(([key, value]) => (
+                            <div key={key} className="flex justify-between">
+                              <span className="font-medium text-gray-700 dark:text-gray-300">{key}:</span>
+                              <span className="text-gray-600 dark:text-gray-400">{String(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <pre className="whitespace-pre-wrap">{JSON.stringify(patient.external_system_data, null, 2)}</pre>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {medicalRecord?.external_data && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300">Datos del Registro Médico (Sistema Externo):</h4>
+                    <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 p-2 rounded border max-h-20 overflow-y-auto">
+                      {typeof medicalRecord.external_data === 'object' ? (
+                        <div className="space-y-1">
+                          {Object.entries(medicalRecord.external_data).map(([key, value]) => (
+                            <div key={key} className="flex justify-between">
+                              <span className="font-medium text-gray-700 dark:text-gray-300">{key}:</span>
+                              <span className="text-gray-600 dark:text-gray-400">{String(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <pre className="whitespace-pre-wrap">{JSON.stringify(medicalRecord.external_data, null, 2)}</pre>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Alergias */}
+            <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-200 dark:border-red-800">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                <h3 className="text-xs font-semibold text-red-900 dark:text-red-100 uppercase tracking-wide">
+                  Alergias
+                </h3>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {medicalRecord?.alergias && Array.isArray(medicalRecord.alergias) && medicalRecord.alergias.length > 0 ? (
+                  medicalRecord.alergias.map((alergia, idx) => (
+                    <div key={idx} className="bg-white dark:bg-gray-800 px-2 py-1 rounded text-xs border border-red-200 dark:border-red-700">
+                      <span className="text-red-700 dark:text-red-300 font-medium">{alergia}</span>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-xs text-gray-500 italic">No hay alergias registradas.</span>
+                )}
+              </div>
+            </div>
+            {/* Observaciones */}
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-2 mb-2">
+                <FileText className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                <h3 className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
+                  Observaciones
+                </h3>
+              </div>
+              <div className="text-xs text-gray-700 dark:text-gray-300 max-h-20 overflow-y-auto">
+                {medicalRecord?.observaciones ? (
+                  <p className="leading-relaxed">{medicalRecord.observaciones}</p>
+                ) : (
+                  <span className="text-gray-500 italic">No hay observaciones registradas.</span>
+                )}
+              </div>
+            </div>
+          </div>
           <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3 border border-orange-200 dark:border-orange-800">
             <div className="flex items-center gap-2 mb-2">
               <Heart className="w-4 h-4 text-orange-600" />
@@ -642,6 +963,66 @@ export function PatientDetailsModal({ patient, medicalRecord, isOpen, onClose, o
           </div>
         </div>
 
+        {/* Historial Médico */}
+        {medicalHistory && medicalHistory.length > 0 && (
+          <div className="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <FileText className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wide">
+                Historial Médico ({medicalHistory.length} registro{medicalHistory.length !== 1 ? 's' : ''})
+              </h3>
+            </div>
+            <div className="space-y-3 max-h-60 overflow-y-auto">
+              {medicalHistory.map((record, index) => (
+                <div key={record.id || index} className="bg-white dark:bg-gray-700 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                      Registro #{medicalHistory.length - index}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatDate(record.fecha_registro)}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400">Presión:</span>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">
+                        {record.presion_sistolica}/{record.presion_diastolica}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400">Colesterol:</span>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">
+                        {record.colesterol || "N/A"} mg/dL
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400">Glucosa:</span>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">
+                        {record.glucosa || "N/A"} mg/dL
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400">Cigarrillos:</span>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">
+                        {record.cigarrillos_dia || 0}/día
+                      </div>
+                    </div>
+                  </div>
+                  {record.observaciones && (
+                    <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Observaciones:</span>
+                      <div className="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                        {record.observaciones}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
           <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -657,6 +1038,17 @@ export function PatientDetailsModal({ patient, medicalRecord, isOpen, onClose, o
               <FileText className="w-3 h-3 mr-1" />
               Exportar PDF
             </Button>
+            {onPredictAgain && (
+              <Button
+                onClick={() => onPredictAgain(patient!, medicalRecord || undefined)}
+                variant="outline"
+                size="sm"
+                className="h-8 px-3 text-xs font-medium bg-transparent hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700"
+              >
+                <RefreshCw className="w-3 h-3 mr-1" />
+                Nueva predicción
+              </Button>
+            )}
             <Button
               onClick={handleSave}
               size="sm"

@@ -14,14 +14,19 @@ def health_check(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     
-    path('health/', health_check, name='health_check'),
+    # Health checks
+    path('health/', health_check, name='health-check'),
+    path('api/health/', health_check, name='api-health-check'),
+    path('ready/', health_check, name='ready-check'),
+    
+    # API endpoints
     path('api/patients/', include('apps.patients.urls')),
     path('api/predictions/', include('apps.predictions.urls')),
-    path('api/medical-data/', include('apps.medical_data.urls')),
-    path('api/medical-records/', include('apps.patients.urls')),  # Endpoint para medical-records
-    path('api/analytics/', include('apps.analytics.urls')),
-    path('api/integration/', include('apps.integration.urls')),
     path('api/auth/', include('apps.authentication.urls')),
+    path('api/authentication/', include('apps.authentication.urls')),
+    
+    # Token endpoints
+    path('api/token/refresh/', include('apps.authentication.urls')),
 ]
 
 if settings.DEBUG:

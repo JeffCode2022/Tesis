@@ -16,15 +16,20 @@ class CardiovascularPredictor:
     """
     
     def __init__(self):
-        self.model_path = os.path.join(settings.ML_MODELS_PATH, 'cardiovascular_model.pkl')
-        self.scaler_path = os.path.join(settings.ML_MODELS_PATH, 'scaler.pkl')
+        # Aceptar tanto .pkl como .joblib para máxima compatibilidad con modelos entrenados
+        # Priorizar modelos reentrenados con datos realistas
+        self.model_candidates = [
+            os.path.join(settings.ML_MODELS_PATH, 'cardiovascular_model_realistic.joblib'),  # Nuevo modelo reentrenado
+            os.path.join(settings.ML_MODELS_PATH, 'cardiovascular_model.pkl'),
+            os.path.join(settings.ML_MODELS_PATH, 'cardiovascular_model.joblib'),
+        ]
+        self.pipeline_path = os.path.join(settings.ML_MODELS_PATH, 'pipeline.joblib')
+        self.scaler_path = os.path.join(settings.ML_MODELS_PATH, 'scaler_realistic.pkl')  # Nuevo scaler
         
         self.feature_names = [
             'edad', 'imc', 'presion_sistolica', 'presion_diastolica',
-            'colesterol_total', 'colesterol_hdl', 'colesterol_ldl',
-            'trigliceridos', 'glucosa', 'hba1c', 'frecuencia_cardiaca',
-            'indice_paquetes', 'actividad_fisica_score', 'sexo_encoded',
-            'antecedentes_encoded', 'diabetes_encoded', 'hipertension_encoded'
+            'colesterol', 'glucosa', 'indice_paquetes', 'actividad_fisica_encoded',
+            'sexo_encoded', 'antecedentes_encoded'
         ]
         
         self.model = None
@@ -34,15 +39,25 @@ class CardiovascularPredictor:
     def load_models(self):
         """Cargar modelos entrenados si existen"""
         try:
-            if os.path.exists(self.model_path):
-                self.model = joblib.load(self.model_path)
-                logger.info("Modelo cardiovascular cargado exitosamente")
+            # Preferir pipeline unificado si existe
+            if os.path.exists(self.pipeline_path):
+                self.model = joblib.load(self.pipeline_path)
+                self.scaler = None  # Ya está dentro del pipeline
+                logger.info("Pipeline de modelo cargado exitosamente (pipeline.joblib)")
             else:
-                logger.info("Modelo no encontrado, usando sistema de reglas médicas")
+                # Buscar el primer modelo existente de la lista de candidatos
+                model_path = next((p for p in self.model_candidates if os.path.exists(p)), None)
+                if model_path:
+                    self.model = joblib.load(model_path)
+                    logger.info(f"Modelo cardiovascular cargado exitosamente desde: {os.path.basename(model_path)}")
+                else:
+                    logger.info("Modelo no encontrado (.pkl/.joblib), usando sistema de reglas médicas")
                 
-            if os.path.exists(self.scaler_path):
-                self.scaler = joblib.load(self.scaler_path)
-                logger.info("Scaler cargado exitosamente")
+            # Cargar scaler solo si NO usamos pipeline
+            if self.model is not None and not os.path.exists(self.pipeline_path):
+                if os.path.exists(self.scaler_path):
+                    self.scaler = joblib.load(self.scaler_path)
+                    logger.info("Scaler cargado exitosamente")
                 
         except Exception as e:
             logger.error(f"Error cargando modelos: {e}")
@@ -57,8 +72,8 @@ class CardiovascularPredictor:
             # Preparar features
             features = self._extract_features(medical_record)
             
-            # Realizar predicción
-            if self.model and self.scaler:
+            # Realizar predicción: si hay modelo (pipeline o modelo+scaler) usamos ML
+            if self.model is not None:
                 prediction_result = self._ml_prediction(features, medical_record)
             else:
                 prediction_result = self._rule_based_prediction(features, medical_record)
@@ -75,145 +90,294 @@ class CardiovascularPredictor:
             return self._default_prediction()
 
     def _extract_features(self, medical_record) -> Dict[str, float]:
-        """Extraer y preparar features del registro médico"""
+        """Extraer y preparar features del registro médico para el modelo reentrenado"""
         patient = medical_record.patient
-        
+
         # Calcular IMC
         imc = patient.imc or 25.0  # Valor por defecto
-        
+
         # Calcular índice de paquetes/año
-        indice_paquetes = medical_record.indice_paquetes_ano
-        
-        # Mapear actividad física a score numérico
-        actividad_mapping = {
-            'sedentario': 0, 'ligero': 1, 'moderado': 2, 'intenso': 3
-        }
-        actividad_score = actividad_mapping.get(medical_record.actividad_fisica, 0)
-        
-        # Mapear calidad de dieta
-        dieta_mapping = {
-            'poco_saludable': 0, 'moderada': 1, 'saludable': 2, 'muy_saludable': 3
-        }
-        dieta_score = dieta_mapping.get(medical_record.calidad_dieta, 1)
-        
-        # Codificar variables categóricas
-        sexo_encoded = 1 if patient.sexo == 'M' else 0
-        
-        antecedentes_mapping = {'si': 1, 'no': 0, 'desconoce': 0.5}
-        antecedentes_encoded = antecedentes_mapping.get(medical_record.antecedentes_cardiacos, 0)
-        
+        indice_paquetes = medical_record.indice_paquetes_ano or 0.0
+
         # Calcular edad desde fecha de nacimiento
         from datetime import date
         if patient.fecha_nacimiento:
             today = date.today()
-            age = today.year - patient.fecha_nacimiento.year - ((today.month, today.day) < (patient.fecha_nacimiento.month, patient.fecha_nacimiento.day))
+            edad = today.year - patient.fecha_nacimiento.year - ((today.month, today.day) < (patient.fecha_nacimiento.month, patient.fecha_nacimiento.day))
         else:
-            age = 0
-        
-        features = {
-            # Variables demográficas
-            'edad': age,
-            'sexo_encoded': sexo_encoded,
-            
-            # Antropometría
-            'imc': imc,
-            'circunferencia_cintura': medical_record.circunferencia_cintura,
-            'indice_cintura_cadera': medical_record.indice_cintura_cadera,
-            
-            # Presión arterial
-            'presion_sistolica': medical_record.presion_sistolica,
-            'presion_diastolica': medical_record.presion_diastolica,
-            
-            # Perfil lipídico
-            'colesterol_total': medical_record.colesterol_total or 200,
-            'colesterol_hdl': medical_record.colesterol_hdl or 50,
-            'colesterol_ldl': medical_record.colesterol_ldl or 130,
-            'trigliceridos': medical_record.trigliceridos or 150,
-            
-            # Glucosa y diabetes
-            'glucosa': medical_record.glucosa or 100,
-            'hba1c': medical_record.hemoglobina_glicosilada or 5.5,
-            'diabetes_encoded': 1 if medical_record.diabetes else 0,
-            
-            # Función renal
-            'creatinina': medical_record.creatinina or 1.0,
-            'tfg': medical_record.tfg or 90,
-            'microalbuminuria_encoded': 1 if medical_record.microalbuminuria else 0,
-            
-            # Marcadores inflamatorios
-            'proteina_c_reactiva': medical_record.proteina_c_reactiva or 1.0,
-            'homocisteina': medical_record.homocisteina or 10.0,
-            
-            # Otros biomarcadores
-            'acido_urico': medical_record.acido_urico or 5.0,
-            'fibrinogeno': medical_record.fibrinogeno or 300,
-            
-            # Factores de riesgo
-            'hipertension_encoded': 1 if medical_record.hipertension else 0,
-            'tabaquismo_encoded': 1 if medical_record.tabaquismo else 0,
-            'indice_paquetes': indice_paquetes,
-            'antecedentes_encoded': antecedentes_encoded,
-            
-            # Estilo de vida
-            'actividad_fisica_score': actividad_score,
-            'dieta_score': dieta_score,
-            'alcohol_encoded': 1 if medical_record.consumo_alcohol else 0,
-            'unidades_alcohol_semana': medical_record.unidades_alcohol_semana,
-            
-            # Factores psicosociales
-            'estres_encoded': 1 if medical_record.estres_psicologico else 0,
-            'nivel_estres': medical_record.nivel_estres,
-            
-            # Condiciones médicas
-            'apnea_sueno_encoded': 1 if medical_record.apnea_sueno else 0,
-            'antecedentes_familiares_encoded': 1 if medical_record.antecedentes_familiares else 0,
-            
-            # Medicamentos
-            'toma_estatinas_encoded': 1 if medical_record.toma_estatinas else 0,
-            'toma_antihipertensivos_encoded': 1 if medical_record.toma_antihipertensivos else 0,
-            'toma_antidiabeticos_encoded': 1 if medical_record.toma_antidiabeticos else 0,
+            edad = 30  # Valor por defecto
+
+        # Codificar variables categóricas (0-1 encoding)
+        sexo_encoded = 1 if patient.sexo == 'M' else 0
+
+        antecedentes_mapping = {'si': 1, 'no': 0, 'desconoce': 0}
+        antecedentes_encoded = antecedentes_mapping.get(medical_record.antecedentes_cardiacos, 0)
+
+        # Mapear actividad física a encoding numérico
+        actividad_mapping = {
+            'sedentario': 0,
+            'ligero': 1,
+            'moderado': 2,
+            'intenso': 3
         }
-        
+        actividad_fisica_encoded = actividad_mapping.get(medical_record.actividad_fisica, 1)
+
+        # Features simplificadas para el modelo reentrenado
+        features = {
+            'edad': float(edad),
+            'imc': float(imc),
+            'presion_sistolica': float(medical_record.presion_sistolica or 120),
+            'presion_diastolica': float(medical_record.presion_diastolica or 80),
+            'colesterol': float(medical_record.colesterol_total or 200),
+            'glucosa': float(medical_record.glucosa or 100),
+            'indice_paquetes': float(indice_paquetes),
+            'actividad_fisica_encoded': float(actividad_fisica_encoded),
+            'sexo_encoded': float(sexo_encoded),
+            'antecedentes_encoded': float(antecedentes_encoded)
+        }
+
         return features
 
+    def _ml_prediction(self, features: Dict[str, float], medical_record) -> Dict[str, Any]:
+        """Realizar predicción usando modelo de machine learning"""
+        try:
+            # Preparar features en el orden correcto para el modelo
+            feature_values = []
+            for feature_name in self.feature_names:
+                if feature_name in features:
+                    feature_values.append(features[feature_name])
+                else:
+                    # Valor por defecto si falta alguna feature
+                    feature_values.append(0.0)
+
+            # Convertir a numpy array
+            X = np.array([feature_values])
+
+            # Aplicar scaler si existe
+            if self.scaler is not None:
+                X_scaled = self.scaler.transform(X)
+            else:
+                X_scaled = X
+
+            # Realizar predicción
+            prediction_proba = self.model.predict_proba(X_scaled)[0]
+            prediction = self.model.predict(X_scaled)[0]
+
+            # Mapear predicción numérica a nivel de riesgo
+            risk_levels = {0: 'BAJO', 1: 'MEDIO', 2: 'ALTO'}
+            risk_level = risk_levels.get(prediction, 'MEDIO')
+
+            # Calcular probabilidad del riesgo predicho
+            risk_probability = prediction_proba[prediction] * 100
+
+            # Análisis de factores de riesgo
+            risk_factors = self._analyze_risk_factors_ml(features)
+
+            # Recomendaciones basadas en el riesgo
+            recommendations = self._generate_recommendations(risk_level, features)
+
+            return {
+                'riesgo_nivel': risk_level,
+                'probabilidad': round(risk_probability, 1),
+                'factores_riesgo': risk_factors,
+                'recomendaciones': recommendations,
+                'model_version': 'realistic_v1.0.0',
+                'confidence_score': round(max(prediction_proba), 3),
+                'features_used': features,
+                'prediction_probabilities': {
+                    'BAJO': round(prediction_proba[0] * 100, 1),
+                    'MEDIO': round(prediction_proba[1] * 100, 1),
+                    'ALTO': round(prediction_proba[2] * 100, 1)
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Error en predicción ML: {e}")
+            # Fallback al sistema de reglas
+            return self._rule_based_prediction(features, medical_record)
+
+    def _analyze_risk_factors_ml(self, features: Dict[str, float]) -> List[str]:
+        """Analizar factores de riesgo para predicción ML"""
+        risk_factors = []
+
+        # Edad
+        if features['edad'] > 65:
+            risk_factors.append(f"Edad avanzada ({features['edad']:.0f} años)")
+        elif features['edad'] > 45:
+            risk_factors.append(f"Edad media ({features['edad']:.0f} años)")
+
+        # IMC
+        if features['imc'] > 30:
+            risk_factors.append(f"Obesidad (IMC: {features['imc']:.1f})")
+        elif features['imc'] > 25:
+            risk_factors.append(f"Sobrepeso (IMC: {features['imc']:.1f})")
+
+        # Presión arterial
+        if features['presion_sistolica'] > 140 or features['presion_diastolica'] > 90:
+            risk_factors.append(f"Hipertensión ({features['presion_sistolica']:.0f}/{features['presion_diastolica']:.0f} mmHg)")
+        elif features['presion_sistolica'] > 130 or features['presion_diastolica'] > 80:
+            risk_factors.append(f"Presión elevada ({features['presion_sistolica']:.0f}/{features['presion_diastolica']:.0f} mmHg)")
+
+        # Colesterol
+        if features['colesterol'] > 240:
+            risk_factors.append(f"Colesterol alto ({features['colesterol']:.0f} mg/dL)")
+        elif features['colesterol'] > 200:
+            risk_factors.append(f"Colesterol borderline ({features['colesterol']:.0f} mg/dL)")
+
+        # Glucosa
+        if features['glucosa'] > 126:
+            risk_factors.append(f"Glucosa elevada ({features['glucosa']:.0f} mg/dL)")
+        elif features['glucosa'] > 100:
+            risk_factors.append(f"Glucosa alterada ({features['glucosa']:.0f} mg/dL)")
+
+        # Tabaquismo
+        if features['indice_paquetes'] > 10:
+            risk_factors.append(f"Tabaquismo intenso ({features['indice_paquetes']:.1f} paquetes/año)")
+        elif features['indice_paquetes'] > 0:
+            risk_factors.append(f"Tabaquismo ({features['indice_paquetes']:.1f} paquetes/año)")
+
+        # Actividad física
+        if features['actividad_fisica_encoded'] < 1:
+            risk_factors.append("Sedentarismo")
+
+        # Antecedentes
+        if features['antecedentes_encoded'] > 0:
+            risk_factors.append("Antecedentes cardíacos familiares")
+
+        return risk_factors
+
+    def _generate_recommendations(self, risk_level: str, features: Dict[str, float]) -> List[str]:
+        """Generar recomendaciones basadas en el nivel de riesgo"""
+        recommendations = []
+
+        if risk_level == 'ALTO':
+            recommendations.extend([
+                "Consulta cardiológica inmediata",
+                "Exámenes cardíacos completos (ECG, ecocardiograma, pruebas de esfuerzo)",
+                "Control estricto de factores de riesgo",
+                "Posible inicio de tratamiento farmacológico"
+            ])
+        elif risk_level == 'MEDIO':
+            recommendations.extend([
+                "Consulta cardiológica en las próximas 4-6 semanas",
+                "Exámenes de laboratorio básicos",
+                "Modificación de estilo de vida",
+                "Seguimiento regular de presión arterial y colesterol"
+            ])
+        else:  # BAJO
+            recommendations.extend([
+                "Mantener controles médicos regulares",
+                "Estilo de vida saludable",
+                "Prevención primaria",
+                "Chequeos anuales"
+            ])
+
+        # Recomendaciones específicas basadas en factores de riesgo
+        if features['imc'] > 25:
+            recommendations.append("Control de peso y dieta saludable")
+        if features['presion_sistolica'] > 130:
+            recommendations.append("Control de presión arterial")
+        if features['colesterol'] > 200:
+            recommendations.append("Control de colesterol")
+        if features['indice_paquetes'] > 0:
+            recommendations.append("Dejar de fumar - programa de cesación tabáquica")
+        if features['actividad_fisica_encoded'] < 2:
+            recommendations.append("Aumentar actividad física (150 min/semana de ejercicio moderado)")
+
+        return recommendations
+
     def _rule_based_prediction(self, features: Dict[str, float], medical_record) -> Dict[str, Any]:
-        """Sistema de predicción basado en guías clínicas"""
-        
+        """Sistema de predicción basado en reglas médicas cuando ML falla"""
+        # Implementación básica de reglas médicas
         risk_score = 0
         risk_factors = []
-        detailed_scores = {}
-        
-        # 1. EVALUACIÓN POR EDAD Y SEXO
-        age_sex_score = 0
-        if features['sexo_encoded'] == 1:  # Hombre
-            if features['edad'] >= 45:
-                age_sex_score += 20
-                risk_factors.append(f"Hombre ≥45 años (edad: {features['edad']})")
-        else:  # Mujer
-            if features['edad'] >= 55:
-                age_sex_score += 20
-                risk_factors.append(f"Mujer ≥55 años (edad: {features['edad']})")
-        
-        detailed_scores['edad_sexo'] = age_sex_score
-        risk_score += age_sex_score
-        
-        # 2. EVALUACIÓN DE PRESIÓN ARTERIAL
-        bp_score = 0
-        sistolica = features['presion_sistolica']
-        diastolica = features['presion_diastolica']
-        
-        if sistolica >= 180 or diastolica >= 110:
-            bp_score = 30
-            risk_factors.append(f"Hipertensión severa ({sistolica}/{diastolica} mmHg)")
-        elif sistolica >= 160 or diastolica >= 100:
-            bp_score = 25
-            risk_factors.append(f"Hipertensión moderada ({sistolica}/{diastolica} mmHg)")
-        elif sistolica >= 140 or diastolica >= 90:
-            bp_score = 20
-            risk_factors.append(f"Hipertensión leve ({sistolica}/{diastolica} mmHg)")
-        elif sistolica >= 130 or diastolica >= 80:
-            bp_score = 10
-            risk_factors.append(f"Presión arterial elevada ({sistolica}/{diastolica} mmHg)")
+
+        # Evaluar factores de riesgo
+        if features['edad'] > 65:
+            risk_score += 25
+            risk_factors.append(f"Edad avanzada ({features['edad']:.0f} años)")
+        elif features['edad'] > 45:
+            risk_score += 15
+            risk_factors.append(f"Edad media ({features['edad']:.0f} años)")
+
+        if features['imc'] > 30:
+            risk_score += 20
+            risk_factors.append(f"Obesidad (IMC: {features['imc']:.1f})")
+        elif features['imc'] > 25:
+            risk_score += 10
+            risk_factors.append(f"Sobrepeso (IMC: {features['imc']:.1f})")
+
+        if features['presion_sistolica'] > 140 or features['presion_diastolica'] > 90:
+            risk_score += 25
+            risk_factors.append(f"Hipertensión ({features['presion_sistolica']:.0f}/{features['presion_diastolica']:.0f})")
+        elif features['presion_sistolica'] > 130 or features['presion_diastolica'] > 80:
+            risk_score += 15
+            risk_factors.append(f"Presión elevada ({features['presion_sistolica']:.0f}/{features['presion_diastolica']:.0f})")
+
+        if features['colesterol'] > 240:
+            risk_score += 20
+            risk_factors.append(f"Colesterol alto ({features['colesterol']:.0f})")
+        elif features['colesterol'] > 200:
+            risk_score += 10
+            risk_factors.append(f"Colesterol borderline ({features['colesterol']:.0f})")
+
+        if features['glucosa'] > 126:
+            risk_score += 20
+            risk_factors.append(f"Glucosa elevada ({features['glucosa']:.0f})")
+        elif features['glucosa'] > 100:
+            risk_score += 10
+            risk_factors.append(f"Glucosa alterada ({features['glucosa']:.0f})")
+
+        if features['indice_paquetes'] > 10:
+            risk_score += 20
+            risk_factors.append(f"Tabaquismo intenso ({features['indice_paquetes']:.1f} paquetes/año)")
+        elif features['indice_paquetes'] > 0:
+            risk_score += 10
+            risk_factors.append(f"Tabaquismo ({features['indice_paquetes']:.1f} paquetes/año)")
+
+        if features['antecedentes_encoded'] > 0:
+            risk_score += 15
+            risk_factors.append("Antecedentes cardíacos familiares")
+
+        # Determinar nivel de riesgo
+        if risk_score >= 40:
+            risk_level = 'ALTO'
+            probability = 85.0
+        elif risk_score >= 20:
+            risk_level = 'MEDIO'
+            probability = 60.0
+        else:
+            risk_level = 'BAJO'
+            probability = 25.0
+
+        recommendations = self._generate_recommendations(risk_level, features)
+
+        return {
+            'riesgo_nivel': risk_level,
+            'probabilidad': probability,
+            'factores_riesgo': risk_factors,
+            'recomendaciones': recommendations,
+            'model_version': 'rules_fallback_v1.0.0',
+            'confidence_score': 0.7,
+            'features_used': features,
+            'scores_detallados': {'total_score': risk_score}
+        }
+
+    def _describe_risk_factor(self, feature_name: str, value: float) -> str:
+        """Describir factor de riesgo basado en el nombre y valor"""
+        descriptions = {
+            'edad': f"Edad: {value:.0f} años" if value > 45 else None,
+            'imc': f"IMC elevado: {value:.1f}" if value > 25 else None,
+            'presion_sistolica': f"Presión sistólica: {value:.0f} mmHg" if value > 130 else None,
+            'presion_diastolica': f"Presión diastólica: {value:.0f} mmHg" if value > 80 else None,
+            'colesterol': f"Colesterol: {value:.0f} mg/dL" if value > 200 else None,
+            'glucosa': f"Glucosa: {value:.0f} mg/dL" if value > 100 else None,
+            'indice_paquetes': f"Tabaquismo: {value:.1f} paquetes/año" if value > 0 else None,
+        }
+
+        return descriptions.get(feature_name)
+
+    def _describe_risk_factor(self, feature_name: str, value: float) -> str:
         
         detailed_scores['presion_arterial'] = bp_score
         risk_score += bp_score

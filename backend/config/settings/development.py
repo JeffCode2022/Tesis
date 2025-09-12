@@ -1,36 +1,68 @@
 from .base import *
 import os
-from decouple import config
-import dj_database_url
 
 # Debug settings
 DEBUG = True
 
-# Database
-DATABASES = {
-    'default': dj_database_url.config(
-        default=config(
-            'DATABASE_URL',
-            default='postgresql://postgres:postgres@localhost:5432/cardiovascular_db'
-        ),
-        conn_max_age=600,
-        conn_health_checks=True,
+# Database - PostgreSQL configuration with encoding fix
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Force PostgreSQL with proper encoding handling
+try:
+    import psycopg2
+    
+    # Test connection with proper encoding
+    test_conn = psycopg2.connect(
+        host=os.getenv('DB_HOST', 'localhost'),
+        port=os.getenv('DB_PORT', '5432'),
+        user=os.getenv('DB_USER', 'postgres'),
+        password=os.getenv('DB_PASSWORD', 'chungadev'),
+        database=os.getenv('DB_NAME', 'cardiovascular_db'),
+        connect_timeout=5,
+        client_encoding='utf8'  # Force UTF8 encoding
     )
-}
+    test_conn.close()
+    
+    # If test passes, use PostgreSQL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'cardiovascular_db'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', 'chungadev'),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+            'OPTIONS': {
+                'client_encoding': 'UTF8',
+            },
+            'CONN_MAX_AGE': 600,
+            'CONN_HEALTH_CHECKS': True,
+        }
+    }
+    logger.info("✅ PostgreSQL connection successful - using PostgreSQL")
+    
+except Exception as e:
+    logger.warning(f"⚠️ PostgreSQL error: {e}")
+    # Fallback to SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db_dev.sqlite3',
+            'OPTIONS': {
+                'timeout': 20,
+            },
+        }
+    }
+    logger.info("🔄 Using SQLite fallback for development")
 
 # Email settings
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# Cache settings
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': config('REDIS_URL', default='redis://localhost:6379/1'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        }
-    }
-}
+# Cache settings - Mantener configuración completa de base.py
+# No sobrescribir CACHES para mantener configuración de sessions
+CACHE_TTL = 3600  # 1 hora para desarrollo
 
 # Debug toolbar settings
 # INSTALLED_APPS += ['debug_toolbar']
@@ -98,7 +130,7 @@ LOGGING['handlers']['console'] = {
     'class': 'logging.StreamHandler',
     'formatter': 'verbose',
 }
-LOGGING['loggers']['django']['handlers'] = ['console', 'file']
+LOGGING['loggers']['django']['handlers'] = ['console', 'file_general']
 LOGGING['loggers']['django']['level'] = 'DEBUG'
 LOGGING['loggers']['corsheaders'] = {
     'handlers': ['console'],

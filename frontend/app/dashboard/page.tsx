@@ -5,12 +5,12 @@ import dynamic from "next/dynamic"
 import { useAuth } from "@/hooks/useAuth"
 import { useRouter } from "next/navigation"
 import { v4 as uuidv4 } from 'uuid'
-import { 
-  LayoutDashboard, 
-  Users, 
-  FileText, 
-  BarChart3, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Users,
+  FileText,
+  BarChart3,
+  Settings,
   LogOut,
   Heart,
   Activity,
@@ -26,6 +26,7 @@ import { PredictionResults } from "@/components/prediction-results"
 import { MedicalDataImport } from "@/components/medical-data-import"
 import { PatientsList } from "@/components/patients-list"
 import { Sidebar } from "@/components/sidebar"
+import { ReportsView } from "@/components/reports"
 
 // Import services
 import { predictionService, type PredictionResult, type PredictionData } from "@/lib/services/predictions"
@@ -87,7 +88,10 @@ export default function Dashboard() {
     ],
     common_risk_factors: [],
     monthly_evolution: [],
-    model_accuracy: 0
+    model_accuracy: 0,
+    patients_history: [],
+    high_risk_history: [],
+    accuracy_history: []
   })
 
   const [formData, setFormData] = useState({
@@ -115,6 +119,8 @@ export default function Dashboard() {
     hipertension: "no",
     numero_historia: "",
   })
+
+  const [formKey, setFormKey] = useState(0) // Key para forzar re-renderización del formulario
 
   const [prediction, setPrediction] = useState<PredictionResult | null>(null)
   const [patients, setPatients] = useState<Patient[]>([])
@@ -147,6 +153,64 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error handling prediction result:', error)
     }
+  }
+
+  // Función para navegar a predicciones y completar formulario con datos del paciente
+  const handlePredictAgain = (patient: Patient, medicalRecord?: any) => {
+    // Extraer nombre y apellidos del nombre_completo si no están disponibles por separado
+    let nombre = patient.nombre;
+    let apellidos = patient.apellidos;
+
+    if ((!nombre || !apellidos) && patient.nombre_completo) {
+      const partes = patient.nombre_completo.trim().split(' ');
+      if (partes.length >= 2) {
+        nombre = partes[0] || "";
+        apellidos = partes.slice(1).join(' ') || "";
+      } else {
+        nombre = patient.nombre_completo;
+        apellidos = "";
+      }
+      console.log('[Dashboard] Extraído de nombre_completo:', { nombre_completo: patient.nombre_completo, nombre, apellidos });
+    }
+
+    console.log('[Dashboard] Datos finales para formulario:', { nombre, apellidos, dni: patient.dni });
+
+    // Completar el formulario con los datos del paciente
+    const patientData = {
+      nombre: nombre || "",
+      apellidos: apellidos || "",
+      dni: patient.dni || "",
+      fecha_nacimiento: patient.fecha_nacimiento || "",
+      sexo: patient.sexo || "M",
+      peso: patient.peso ? patient.peso.toString() : "",
+      altura: patient.altura ? patient.altura.toString() : "",
+      numero_historia: patient.numero_historia || "",
+      // Completar con datos del registro médico si existen
+      presion_sistolica: medicalRecord?.presion_sistolica ? medicalRecord.presion_sistolica.toString() : "",
+      presion_diastolica: medicalRecord?.presion_diastolica ? medicalRecord.presion_diastolica.toString() : "",
+      frecuencia_cardiaca: medicalRecord?.frecuencia_cardiaca ? medicalRecord.frecuencia_cardiaca.toString() : "",
+      colesterol: medicalRecord?.colesterol ? medicalRecord.colesterol.toString() : "",
+      colesterol_hdl: medicalRecord?.colesterol_hdl ? medicalRecord.colesterol_hdl.toString() : "",
+      colesterol_ldl: medicalRecord?.colesterol_ldl ? medicalRecord.colesterol_ldl.toString() : "",
+      trigliceridos: medicalRecord?.trigliceridos ? medicalRecord.trigliceridos.toString() : "",
+      glucosa: medicalRecord?.glucosa ? medicalRecord.glucosa.toString() : "",
+      hemoglobina_glicosilada: medicalRecord?.hemoglobina_glicosilada ? medicalRecord.hemoglobina_glicosilada.toString() : "",
+      cigarrillos_dia: medicalRecord?.cigarrillos_dia ? medicalRecord.cigarrillos_dia.toString() : "",
+      anos_tabaquismo: medicalRecord?.anos_tabaquismo ? medicalRecord.anos_tabaquismo.toString() : "",
+      actividad_fisica: medicalRecord?.actividad_fisica || "sedentario",
+      antecedentes_cardiacos: medicalRecord?.antecedentes_cardiacos || "no",
+      diabetes: medicalRecord?.diabetes ? "si" : "no",
+      hipertension: medicalRecord?.hipertension ? "si" : "no",
+    }
+
+    // Actualizar el formulario con los datos del paciente
+    setFormData(patientData)
+
+    // Forzar re-renderización del formulario incrementando la key
+    setFormKey(prev => prev + 1)
+
+    // Navegar a la sección de predicciones
+    setActiveSection('predictions')
   }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -228,7 +292,7 @@ export default function Dashboard() {
         return (
           <div className="space-y-6">
             <MetricsCards data={adaptMetrics(metrics)} onMetricClick={setActiveSection} />
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Model Accuracy and Risk Distribution */}
               <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6">
@@ -271,20 +335,24 @@ export default function Dashboard() {
           </div>
         )
       case 'patients':
-        return <PatientsList importedPatients={importedPatients} />
+        return <PatientsList 
+          importedPatients={importedPatients} 
+          onPredictAgain={handlePredictAgain}
+        />
       case 'predictions':
         return (
           <>
             <div className="grid gap-6 grid-cols-1">
               <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 flex flex-col">
                 <div className="space-y-6">
-                  <PredictionForm 
-                    formData={formData} 
-                    onFormChange={handleFormChange} 
-                    onPredict={handlePredict} 
+                  <PredictionForm
+                    key={formKey}
+                    formData={formData}
+                    onFormChange={handleFormChange}
+                    onPredict={handlePredict}
                   />
-                  <MedicalDataImport 
-                    onFileUpload={handleFileUpload} 
+                  <MedicalDataImport
+                    onFileUpload={handleFileUpload}
                     importedPatients={importedPatients}
                     onDataProcess={processTextData}
                   />
@@ -303,11 +371,10 @@ export default function Dashboard() {
           />
         )
       case 'reports':
-        return <div className="p-4">Reportes en desarrollo...</div>
+        return <ReportsView />
       case 'analytics':
         return <div className="p-4">Analíticas en desarrollo...</div>
-      case 'settings':
-        return <div className="p-4">Configuración en desarrollo...</div>
+
       default:
         return null
     }
@@ -356,15 +423,15 @@ export default function Dashboard() {
         <div className="absolute inset-0 backdrop-blur-2xl bg-white/5 dark:bg-gray-900/5"></div>
       </div>
       <div className="relative z-10">
-        <Header 
+        <Header
           modelAccuracy={metrics.model_accuracy}
           userName={`${user?.first_name} ${user?.last_name}`}
           userRole="Médico"
         />
         <div className="flex">
           {/* Sidebar */}
-          <Sidebar 
-            activeSection={activeSection} 
+          <Sidebar
+            activeSection={activeSection}
             setActiveSection={setActiveSection}
             patientsCount={metrics.total_patients}
             reportsCount={metrics.total_predictions}

@@ -7,7 +7,7 @@ from .services import PolyclinicoIntegrationService
 from apps.patients.models import Patient
 from apps.patients.serializers import PatientSerializer
 from apps.predictions.models import Prediction
-from ml_models.cardiovascular_predictor import cardiovascular_predictor
+from ml_models.cardiovascular_predictor_clean import cardiovascular_predictor
 import logging
 
 logger = logging.getLogger('cardiovascular')

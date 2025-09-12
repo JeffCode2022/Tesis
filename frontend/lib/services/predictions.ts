@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { api } from './api';
 import { patientService } from './patients';
+import { authService } from './auth';
 
 export interface PredictionData {
   id?: string; // UUID opcional
@@ -59,6 +60,12 @@ export const predictionService = {
         numero_historia: typeof data.numero_historia
       });
       
+      // Obtener el usuario actual para asignar como médico tratante
+      const currentUser = authService.getUser();
+      if (!currentUser) {
+        throw new Error('Usuario no autenticado. Debe iniciar sesión para realizar predicciones.');
+      }
+      
       // Primero, crear o actualizar el paciente
       const patient = await patientService.createOrUpdate({
         nombre: data.nombre,
@@ -69,6 +76,7 @@ export const predictionService = {
         peso: data.peso,
         altura: data.altura,
         numero_historia: data.numero_historia,
+        medico_tratante: currentUser.id,
         // Campos requeridos por la interfaz Patient para evitar errores de tipo
         riesgo_actual: null,
         ultimo_registro: new Date().toISOString(),

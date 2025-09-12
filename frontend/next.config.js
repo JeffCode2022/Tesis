@@ -1,7 +1,29 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  trailingSlash: false,
   async rewrites() {
+    console.log('[NEXT.JS] Configurando rewrites para API');
     return [
+      {
+        source: '/api/medical-records/validation/validate',
+        destination: 'http://localhost:8000/api/medical-records/validation/validate/',
+      },
+      {
+        source: '/api/medical-records/validation/validate/',
+        destination: 'http://localhost:8000/api/medical-records/validation/validate/',
+      },
+      {
+        source: '/api/medical-records/validation/test_prediction',
+        destination: 'http://localhost:8000/api/medical-records/validation/test_prediction/',
+      },
+      {
+        source: '/api/medical-records/validation/test_prediction/',
+        destination: 'http://localhost:8000/api/medical-records/validation/test_prediction/',
+      },
+      {
+        source: '/api/medical-records/validation/:path*',
+        destination: 'http://localhost:8000/api/medical-records/validation/:path*',
+      },
       {
         source: '/api/:path*',
         destination: 'http://localhost:8000/api/:path*',

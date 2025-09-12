@@ -70,13 +70,13 @@ class PatientListSerializer(serializers.ModelSerializer):
         ]
 
     def get_ultimo_registro(self, obj):
-        latest_record = obj.medical_records.first()
+        latest_record = obj.medical_records.order_by('-fecha_registro').first()
         return latest_record.fecha_registro if latest_record else None
 
     def get_riesgo_actual(self, obj):
         try:
             from apps.predictions.models import Prediction
-            latest_prediction = Prediction.objects.filter(patient=obj).first()
+            latest_prediction = Prediction.objects.filter(patient=obj).order_by('-created_at').first()
             if latest_prediction:
                 from apps.predictions.serializers import PredictionSerializer
                 return PredictionSerializer(latest_prediction).data
@@ -89,12 +89,17 @@ class PatientCreateSerializer(serializers.ModelSerializer):
         model = Patient
         fields = [
             'id', 'nombre', 'apellidos', 'dni', 'fecha_nacimiento', 'sexo', 'peso', 'altura',
-            'telefono', 'email', 'direccion', 'numero_historia', 'hospital',
+            'telefono', 'email', 'direccion', 'numero_historia', 'hospital', 'medico_tratante',
         ]
         read_only_fields = ['id']
 
     def create(self, validated_data):
         print("Datos validados en PatientCreateSerializer.create:", validated_data)
+        # Si no se proporciona medico_tratante, asignar el usuario actual
+        if 'medico_tratante' not in validated_data or not validated_data['medico_tratante']:
+            request = self.context.get('request')
+            if request and request.user:
+                validated_data['medico_tratante'] = request.user
         return super().create(validated_data)
 
 class PatientDNISearchSerializer(serializers.Serializer):
@@ -149,7 +154,7 @@ class PatientForPredictionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Patient
         fields = [
-            'nombre', 'apellidos', 'dni', 'fecha_nacimiento', 'sexo', 'peso', 'altura',
+            'id', 'nombre', 'apellidos', 'dni', 'fecha_nacimiento', 'sexo', 'peso', 'altura',
             'numero_historia',
             # Campos anotados desde el último registro médico
             'presionSistolica', 'presionDiastolica', 'colesterol', 'glucosa',

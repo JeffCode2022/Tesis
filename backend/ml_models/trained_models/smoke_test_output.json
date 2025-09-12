@@ -1,0 +1,31 @@
+{
+  "model_path": "c:\\Users\\CHUNGA\\Desktop\\SISTEMA DE PREDICTION\\backend\\ml_models\\trained_models\\pipeline.joblib",
+  "features_order": [
+    "age_years",
+    "imc",
+    "ap_hi",
+    "ap_lo",
+    "pulse_pressure",
+    "map",
+    "cholesterol",
+    "gluc",
+    "smoke",
+    "alco",
+    "active"
+  ],
+  "input_sample": {
+    "age_years": 50.0,
+    "imc": 27.0,
+    "ap_hi": 135.0,
+    "ap_lo": 85.0,
+    "pulse_pressure": 50.0,
+    "map": 101.7,
+    "cholesterol": 2.0,
+    "gluc": 1.0,
+    "smoke": 0.0,
+    "alco": 0.0,
+    "active": 1.0
+  },
+  "proba_positive": 0.6270951628684998,
+  "pred_label": 1
+}

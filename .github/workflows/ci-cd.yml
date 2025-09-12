@@ -1,0 +1,301 @@
+# 🚀 NIVEL 1: CI/CD Pipeline Avanzado
+# Testing, Building, y Deploy Automático
+
+name: CI/CD Pipeline - Sistema Cardiovascular
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Job 1: Testing y Análisis de Código
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_USER: test_user
+          POSTGRES_DB: test_cardiovascular_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+
+    - name: Configurar Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Instalar dependencias
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements.txt
+        pip install coverage pytest-cov flake8 black isort safety bandit
+
+    - name: Verificar formato de código
+      run: |
+        cd backend
+        black --check .
+        isort --check-only .
+        flake8 .
+
+    - name: Análisis de seguridad
+      run: |
+        cd backend
+        safety check
+        bandit -r . -x */tests/*,*/migrations/*
+
+    - name: Ejecutar tests con coverage
+      env:
+        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_cardiovascular_db
+        REDIS_URL: redis://localhost:6379/1
+        DJANGO_SETTINGS_MODULE: cardiovascular_project.settings
+        SECRET_KEY: test-secret-key-for-ci
+      run: |
+        cd backend
+        coverage run -m pytest -v
+        coverage report --show-missing
+        coverage xml
+
+    - name: Subir coverage a Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./backend/coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+    - name: Health Check Test
+      env:
+        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_cardiovascular_db
+        REDIS_URL: redis://localhost:6379/1
+        DJANGO_SETTINGS_MODULE: cardiovascular_project.settings
+        SECRET_KEY: test-secret-key-for-ci
+      run: |
+        cd backend
+        python manage.py migrate --run-syncdb
+        python -c "
+        import os, django
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'cardiovascular_project.settings')
+        django.setup()
+        from apps.common.health_checks import health_service
+        result = health_service.run_all_checks()
+        print(f'Health Score: {result[\"overall_health_score\"]}%')
+        assert result['overall_health_score'] >= 70, f'Health check failed: {result}'
+        "
+
+  # Job 2: Build Docker Image
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+
+    - name: Configurar Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login a Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extraer metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build y Push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # Job 3: Deploy a Staging
+  deploy-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    
+    steps:
+    - name: Deploy a Staging
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.STAGING_HOST }}
+        username: ${{ secrets.STAGING_USER }}
+        key: ${{ secrets.STAGING_SSH_KEY }}
+        script: |
+          cd /opt/cardiovascular-staging
+          docker-compose pull
+          docker-compose up -d --remove-orphans
+          
+          # Wait for services to be ready
+          sleep 30
+          
+          # Health check
+          curl -f http://localhost/health/ || exit 1
+          
+          # Run migrations if needed
+          docker-compose exec -T web python manage.py migrate --check
+          
+          echo "Staging deployment completed successfully"
+
+  # Job 4: Deploy a Producción
+  deploy-production:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - name: Crear Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ github.run_number }}
+        release_name: Release v${{ github.run_number }}
+        draft: false
+        prerelease: false
+
+    - name: Deploy a Producción
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.PRODUCTION_HOST }}
+        username: ${{ secrets.PRODUCTION_USER }}
+        key: ${{ secrets.PRODUCTION_SSH_KEY }}
+        script: |
+          cd /opt/cardiovascular-production
+          
+          # Backup actual
+          docker-compose exec -T db pg_dump -U cardiovascular_user cardiovascular_db > backup_$(date +%Y%m%d_%H%M%S).sql
+          
+          # Pull nueva imagen
+          docker-compose pull
+          
+          # Deploy con rolling update
+          docker-compose up -d --remove-orphans --scale web=2
+          sleep 30
+          
+          # Health check
+          curl -f https://api.cardioprediction.com/health/ || exit 1
+          
+          # Scale down old instances
+          docker-compose up -d --scale web=1
+          
+          # Clean up
+          docker image prune -f
+          
+          echo "Production deployment completed successfully"
+
+    - name: Notificar Slack
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      if: always()
+
+  # Job 5: Smoke Tests Post-Deploy
+  smoke-tests:
+    needs: [deploy-staging, deploy-production]
+    runs-on: ubuntu-latest
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+    
+    steps:
+    - name: Smoke Tests
+      run: |
+        # Determinar URL basada en el branch
+        if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          URL="https://api.cardioprediction.com"
+        else
+          URL="https://staging.cardioprediction.com"
+        fi
+        
+        echo "Running smoke tests against $URL"
+        
+        # Health check
+        curl -f $URL/health/ | jq '.overall_health_score >= 70'
+        
+        # Ready check
+        curl -f $URL/ready/
+        
+        # API documentation accessible
+        curl -f $URL/api/docs/
+        
+        # Authentication endpoint responsive
+        curl -X POST $URL/api/authentication/login/ \
+          -H "Content-Type: application/json" \
+          -d '{"email":"test@test.com","password":"wrong"}' \
+          | grep -q "error"
+        
+        echo "All smoke tests passed!"
+
+  # Job 6: Security Scan
+  security-scan:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+
+    - name: Scan imagen Docker por vulnerabilidades
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Subir resultados de seguridad
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Scan dependencias Python
+      uses: pypa/gh-action-pip-audit@v1.0.8
+      with:
+        inputs: backend/requirements.txt

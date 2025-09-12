@@ -1,5 +1,6 @@
 # Entorno virtual
-env/.venv/
+env/
+.venv/
 venv/
 ENV/
 
@@ -9,8 +10,28 @@ __pycache__/
 *.class
 
 # Archivos de IDE
-.vscode/.idea/
+.vscode/
+.idea/
 
 # Archivos de sistema
 .DS_Store
 Thumbs.db
+
+# Base de datos
+db.sqlite3
+*.db
+*.sqlite
+
+# Logs
+*.log
+logs/
+
+# Scripts temporales de configuración
+setup_postgresql.py
+diagnose_db.py
+configure_postgresql.bat
+fix_encoding.py
+test_db_connection.py
+
+# Archivos de configuración temporal
+temp_config.py

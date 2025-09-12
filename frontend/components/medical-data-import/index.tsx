@@ -21,9 +21,11 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import { predictionService, type PredictionResult } from "@/lib/services/predictions"
 import { patientService, type Patient } from "@/lib/services/patients"
+import { validatePatientData } from "@/lib/services/validation"
 
 interface MedicalDataImportProps {
   importedPatients: any[]
@@ -46,11 +48,13 @@ interface ProcessedPatient {
   glucosa: string           // Cambiado a string
   cigarrillos_dia: string   // Cambiado a snake_case y string
   anos_tabaquismo: string   // Cambiado a snake_case y string
-  actividad_fisica: string  // Cambiado a snake_case
-  antecedentes_cardiacos: string // Cambiado a snake_case
-  diabetes: string          // Agregado campo faltante
-  hipertension: string      // Agregado campo faltante
-  numero_historia: string
+  actividad_fisica: string  // Agregado para actividad física
+  antecedentes_cardiacos: string // Agregado para antecedentes
+  diabetes: string          // Agregado para diabetes
+  hipertension: string      // Agregado para hipertensión
+  numero_historia: string   // Agregado número de historia clínica
+  activo_fisicamente: boolean // Agregado campo booleano
+  fumador: boolean          // Agregado campo booleano
 }
 
 interface ImportedPatient {
@@ -73,24 +77,49 @@ interface ImportedPatient {
   hipertension: boolean;
 }
 
+// Interfaces para la validación
+interface ValidationError {
+  patientId: string;
+  dni: string;
+  nombre: string;
+  errores: string[];
+}
+
+interface ValidationResult {
+  isValid: boolean;
+  errors: ValidationError[];
+}
+
 export function MedicalDataImport({ importedPatients, onFileUpload, onDataProcess }: MedicalDataImportProps) {
+  // Estados básicos
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [medicalData, setMedicalData] = useState("")
   const [processedPatients, setProcessedPatients] = useState<ProcessedPatient[]>([])
-  
-  // Estados optimizados para la carga de pacientes existentes
+
+  // Estados de validación ya declarados más adelante en el componente
+
+  // Estados para pacientes existentes
   const [displayExistingPatients, setDisplayExistingPatients] = useState<Patient[]>([])
   const [existingPatientsCount, setExistingPatientsCount] = useState(0)
   const [predictedPatientsData, setPredictedPatientsData] = useState<ProcessedPatient[]>([])
 
+  // Estados de predicción y procesamiento
   const [predictions, setPredictions] = useState<PredictionResult[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [isPredicting, setIsPredicting] = useState(false)
   const [isLoadingExisting, setIsLoadingExisting] = useState(false)
   const [processingProgress, setProcessingProgress] = useState(0)
   const [predictionProgress, setPredictionProgress] = useState(0)
+
+  // Estados de feedback
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+
+  // Estados de validación
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
+  const [validating, setValidating] = useState(false)
+  const [validationProgress, setValidationProgress] = useState(0)
+  const [showValidationErrorsModal, setShowValidationErrorsModal] = useState(false)
 
   // Cargar una muestra de pacientes existentes y el conteo total al montar el componente
   useEffect(() => {
@@ -120,17 +149,19 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
     setShowImportDialog(false)
   }
 
-  // Función para procesar archivos CSV/JSON
+  // Función para procesar y validar archivos CSV/JSON
   const processFileData = async (file: File) => {
     setIsProcessing(true)
     setError("")
     setSuccess("")
     setProcessingProgress(0)
-    
+
     try {
+      // 1. Leer y parsear el archivo
       const text = await file.text()
+      setProcessingProgress(20)
       let patients: ProcessedPatient[] = []
-      
+
       if (file.name.endsWith('.csv')) {
         patients = parseCSVData(text)
       } else if (file.name.endsWith('.json')) {
@@ -138,9 +169,35 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
       } else {
         throw new Error("Formato de archivo no soportado")
       }
-      
+      setProcessingProgress(40)
+
+      // 2. Validar datos con el backend
+      console.log('[processFileData] Iniciando validación con backend para', patients.length, 'pacientes')
+      console.log('[processFileData] Datos a validar:', patients[0])
+
+      const validationResult = await validatePatientData(patients)
+      console.log('[processFileData] Resultado de validación:', validationResult)
+      setProcessingProgress(70)
+
+      if (!validationResult.isValid) {
+        console.log('[processFileData] Validación falló:', validationResult.errors)
+        const errors = validationResult.errors?.map(error => ({
+          patientId: 'validation',
+          dni: '',
+          nombre: 'Error de validación',
+          errores: [error.message]
+        })) || []
+
+        setValidationErrors(errors)
+        setShowValidationErrorsModal(true)
+        throw new Error('Se encontraron errores en los datos importados')
+      }
+
+      console.log('[processFileData] Validación exitosa, guardando pacientes')
+
+      // 3. Si todo está correcto, guardar los datos
       setProcessedPatients(patients)
-      setSuccess(`Se procesaron ${patients.length} pacientes correctamente`)
+      setSuccess(`Se procesaron y validaron ${patients.length} pacientes correctamente`)
       setProcessingProgress(100)
     } catch (err: any) {
       setError(err.message || "Error al procesar el archivo")
@@ -154,16 +211,20 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
     const lines = csvText.trim().split('\n')
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
     const patients: ProcessedPatient[] = []
-    
+
+    console.log('[parseCSVData] Headers encontrados:', headers)
+
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim())
       if (values.length < headers.length) continue
-      
+
       const patient: any = {}
       headers.forEach((header, index) => {
         patient[header] = values[index]
       })
-      
+
+      console.log(`[parseCSVData] Patient ${i} raw data:`, patient)
+
       // Mapear campos del CSV a la estructura requerida
       const processedPatient: ProcessedPatient = {
         nombre: patient.nombre || patient.name || "",
@@ -173,8 +234,8 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
         sexo: patient.sexo || patient.gender || "M",
         peso: patient.peso || patient.weight || "0",
         altura: patient.altura || patient.height || "0",
-        presion_sistolica: patient.presion_sistolica || patient.presion_diastolica || patient.presion_diastolica || "0",
-        presion_diastolica: patient.presion_diastolica || patient.presion_diastolica || patient.presion_diastolica || "0",
+        presion_sistolica: patient.presion_sistolica || patient.systolic_pressure || "0",
+        presion_diastolica: patient.presion_diastolica || patient.diastolic_pressure || "0",
         frecuencia_cardiaca: patient.frecuencia_cardiaca || patient.heart_rate || "0",
         colesterol: patient.colesterol || patient.cholesterol || "0",
         glucosa: patient.glucosa || patient.glucose || "0",
@@ -184,15 +245,21 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
         antecedentes_cardiacos: patient.antecedentes_cardiacos || patient.family_history || "no",
         diabetes: patient.diabetes || "no",
         hipertension: patient.hipertension || "no",
-        numero_historia: patient.historia || patient.medical_record || `HC${Date.now()}${i}`
+        numero_historia: patient.historia || patient.medical_record || `HC${Date.now()}${i}`,
+        // Mapear campos booleanos del CSV
+        activo_fisicamente: patient.activo_fisicamente === "true" || patient.activo_fisicamente === true,
+        fumador: patient.fumador === "true" || patient.fumador === true
       }
-      
+
+      console.log(`[parseCSVData] Patient ${i} processed:`, processedPatient)
+
       // Validar datos mínimos requeridos
       if (processedPatient.nombre && processedPatient.fecha_nacimiento) {
         patients.push(processedPatient)
       }
     }
-    
+
+    console.log('[parseCSVData] Total patients processed:', patients.length)
     return patients
   }
 
@@ -200,9 +267,9 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
   const parseJSONData = (jsonText: string): ProcessedPatient[] => {
     const data = JSON.parse(jsonText)
     const patients: ProcessedPatient[] = []
-    
+
     const array = Array.isArray(data) ? data : [data]
-    
+
     array.forEach((patient: any, index: number) => {
       const processedPatient: ProcessedPatient = {
         nombre: patient.nombre || patient.name || "",
@@ -212,8 +279,8 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
         sexo: patient.sexo || patient.gender || "M",
         peso: patient.peso || patient.weight || "0",
         altura: patient.altura || patient.height || "0",
-        presion_sistolica: patient.presion_sistolica || patient.presion_diastolica || patient.presion_diastolica || "0",
-        presion_diastolica: patient.presion_diastolica || patient.presion_diastolica || patient.presion_diastolica || "0",
+        presion_sistolica: patient.presion_sistolica || patient.systolic_pressure || "0",
+        presion_diastolica: patient.presion_diastolica || patient.diastolic_pressure || "0",
         frecuencia_cardiaca: patient.frecuencia_cardiaca || patient.heart_rate || "0",
         colesterol: patient.colesterol || patient.cholesterol || "0",
         glucosa: patient.glucosa || patient.glucose || "0",
@@ -223,31 +290,174 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
         antecedentes_cardiacos: patient.antecedentes_cardiacos || patient.family_history || "no",
         diabetes: patient.diabetes || "no",
         hipertension: patient.hipertension || "no",
-        numero_historia: patient.numero_historia || patient.medical_record || `HC${Date.now()}${index}`
+        numero_historia: patient.numero_historia || patient.medical_record || `HC${Date.now()}${index}`,
+        // Mapear campos booleanos del JSON
+        activo_fisicamente: patient.activo_fisicamente === "true" || patient.activo_fisicamente === true,
+        fumador: patient.fumador === "true" || patient.fumador === true
       }
-      
+
       if (processedPatient.nombre && processedPatient.fecha_nacimiento) {
         patients.push(processedPatient)
       }
     })
-    
+
     return patients
   }
 
-  // Función para predicción masiva
-  const handleMassPrediction = async () => {
-    setIsPredicting(true)
-    setError("")
-    setSuccess("")
-    setPredictionProgress(0)
-    
+  // Función para validar un paciente
+  function validarPaciente(paciente: ProcessedPatient) {
+    const errores = [];
+    if (!paciente.nombre) errores.push("Falta el nombre");
+    if (!paciente.apellidos) errores.push("Faltan los apellidos");
+    if (!paciente.dni || paciente.dni.length !== 8) errores.push("DNI inválido");
+    if (!paciente.fecha_nacimiento) errores.push("Falta la fecha de nacimiento");
+    if (!paciente.sexo || !["M", "F"].includes(paciente.sexo)) errores.push("Sexo inválido");
+    if (!paciente.peso || isNaN(Number(paciente.peso)) || Number(paciente.peso) <= 0) errores.push("Peso inválido");
+    if (!paciente.altura || isNaN(Number(paciente.altura)) || Number(paciente.altura) <= 0) errores.push("Altura inválida");
+    if (!paciente.presion_sistolica || isNaN(Number(paciente.presion_sistolica))) errores.push("Presión sistólica inválida");
+    if (!paciente.presion_diastolica || isNaN(Number(paciente.presion_diastolica))) errores.push("Presión diastólica inválida");
+    if (!paciente.frecuencia_cardiaca || isNaN(Number(paciente.frecuencia_cardiaca))) errores.push("Frecuencia cardíaca inválida");
+    if (!paciente.colesterol || isNaN(Number(paciente.colesterol))) errores.push("Colesterol inválido");
+    if (!paciente.glucosa || isNaN(Number(paciente.glucosa))) errores.push("Glucosa inválida");
+    if (paciente.cigarrillos_dia === undefined || isNaN(Number(paciente.cigarrillos_dia))) errores.push("Cigarrillos/día inválido");
+    if (paciente.anos_tabaquismo === undefined || isNaN(Number(paciente.anos_tabaquismo))) errores.push("Años de tabaquismo inválido");
+    if (!paciente.actividad_fisica) errores.push("Actividad física faltante");
+    if (!paciente.antecedentes_cardiacos) errores.push("Antecedentes cardíacos faltante");
+    if (!paciente.diabetes || !["si", "no"].includes(paciente.diabetes)) errores.push("Diabetes inválido");
+    if (!paciente.hipertension || !["si", "no"].includes(paciente.hipertension)) errores.push("Hipertensión inválido");
+    if (!paciente.numero_historia) errores.push("Número de historia clínica faltante");
+    return errores;
+  }
+
+  // Función mejorada para validación de todos los pacientes
+  const validateAllPatientsData = async (patients: ProcessedPatient[]): Promise<ValidationResult> => {
+    setValidating(true);
+    const errors: ValidationError[] = [];
+
     try {
-      // 1. Obtener pacientes existentes optimizados para predicción desde el nuevo endpoint
-      console.log("[MedicalDataImport] Obteniendo pacientes optimizados para predicción desde el backend...")
-      const existingPatientsForPrediction = await patientService.getAllPatientsForPrediction()
-      
-      // 2. Combinar con los pacientes recién importados/procesados
-      const allPatientsToPredict = [...processedPatients, ...existingPatientsForPrediction]
+      for (let i = 0; i < patients.length; i++) {
+        const patient = patients[i];
+        const patientErrors = validarPaciente(patient);
+        if (patientErrors.length > 0) {
+          errors.push({
+            patientId: patient.numero_historia,
+            dni: patient.dni,
+            nombre: patient.nombre,
+            errores: patientErrors
+          });
+        }
+        setValidationProgress(((i + 1) / patients.length) * 100);
+      }
+    } catch (err) {
+      console.error('Error durante la validación:', err);
+    }
+
+    setValidating(false);
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  };
+
+  // Función mejorada para predicción masiva con validación y test
+  const handleMassPrediction = async () => {
+    // 1. Iniciar validación
+    setValidating(true);
+    setError("");
+    setSuccess("");
+    setValidationProgress(0);
+    setPredictionProgress(0);
+
+    try {
+      console.log("[MedicalDataImport] Iniciando validación de datos...");
+
+      // Test inicial con un paciente de muestra
+      const samplePatient = processedPatients[0];
+      if (samplePatient) {
+        const testResponse = await fetch('/api/medical-records/validation/test_prediction/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ patient: samplePatient })
+        });
+
+        if (!testResponse.ok) {
+          const contentType = testResponse.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await testResponse.json();
+            throw new Error(errorData.message || 'Error en la prueba de predicción');
+          } else {
+            const errorText = await testResponse.text();
+            throw new Error(`Error del servidor: ${testResponse.status}`);
+          }
+        }
+      }
+
+      // 2. Validar todos los datos antes de proceder
+      const validationResult = await validateAllPatientsData(processedPatients);
+
+      if (!validationResult.isValid) {
+        setValidationErrors(validationResult.errors);
+        setShowValidationErrorsModal(true);
+        setError("Se encontraron errores en los datos. Por favor, corrija los errores antes de continuar.");
+        return;
+      }
+
+      // Verificación adicional de campos requeridos
+      const camposRequeridos = [
+        'presion_sistolica',
+        'presion_diastolica',
+        'cigarrillos_dia',
+        'anos_tabaquismo',
+        'actividad_fisica',
+        'antecedentes_cardiacos',
+        'peso',
+        'altura',
+        'colesterol',
+        'glucosa',
+        'diabetes',
+        'hipertension'
+      ];
+
+      const pacientesIncompletos = processedPatients.filter(patient => {
+        const camposFaltantes = camposRequeridos.filter(campo => {
+          const valor = patient[campo as keyof ProcessedPatient];
+          return valor === undefined || valor === null || valor === '' ||
+            (typeof valor === 'number' && isNaN(valor)) ||
+            (typeof valor === 'string' && valor.trim() === '');
+        });
+
+        if (camposFaltantes.length > 0) {
+          console.error(`Campos faltantes para paciente ${patient.nombre} (${patient.dni}):`, camposFaltantes);
+          return true;
+        }
+        return false;
+      });
+
+      if (pacientesIncompletos.length > 0) {
+        const errores = pacientesIncompletos.map(p => ({
+          patientId: p.numero_historia,
+          dni: p.dni,
+          nombre: p.nombre,
+          errores: [`Faltan campos requeridos: ${camposRequeridos.join(', ')}`]
+        }));
+        setValidationErrors(errores);
+        setShowValidationErrorsModal(true);
+        setError("Hay pacientes con campos requeridos faltantes. Por favor, complete todos los campos.");
+        return;
+      }
+
+      // 3. Si la validación es exitosa, mostrar mensaje y continuar con la predicción
+      setSuccess("Validación completada exitosamente. Iniciando proceso de predicción...");
+      setIsPredicting(true);
+
+      // 4. Obtener pacientes existentes optimizados para predicción
+      console.log("[MedicalDataImport] Obteniendo pacientes optimizados para predicción desde el backend...");
+      const existingPatientsForPrediction = await patientService.getAllPatientsForPrediction();
+
+      // 5. Combinar con los pacientes recién importados/procesados
+      const allPatientsToPredict = [...processedPatients, ...existingPatientsForPrediction];
 
       // Guardar los datos que se usarán para predecir, para consistencia en la UI
       setPredictedPatientsData(allPatientsToPredict)
@@ -280,7 +490,7 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
           diabetes: patientData.diabetes,
           hipertension: patientData.hipertension
         });
-        
+
         try {
           const prediction = await predictionService.predict(patientData)
           results.push(prediction)
@@ -297,10 +507,10 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
         }
         setPredictionProgress(((i + 1) / allPatientsToPredict.length) * 100)
       }
-      
+
       setPredictions(results)
       setSuccess(`Se realizaron ${results.length} predicciones de ${allPatientsToPredict.length} pacientes posibles.`)
-      
+
     } catch (err: any) {
       setError("Error durante la predicción masiva: " + err.message)
       console.error("[MedicalDataImport] Error en predicción masiva:", err)
@@ -309,38 +519,10 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
     }
   }
 
-  // Función para validar un paciente
-  function validarPaciente(paciente: ProcessedPatient) {
-    const errores = [];
-    if (!paciente.nombre) errores.push("Falta el nombre");
-    if (!paciente.apellidos) errores.push("Faltan los apellidos");
-    if (!paciente.dni || paciente.dni.length !== 8) errores.push("DNI inválido");
-    if (!paciente.fecha_nacimiento) errores.push("Falta la fecha de nacimiento");
-    if (!paciente.sexo || !["M", "F"].includes(paciente.sexo)) errores.push("Sexo inválido");
-    if (!paciente.peso || isNaN(Number(paciente.peso)) || Number(paciente.peso) <= 0) errores.push("Peso inválido");
-    if (!paciente.altura || isNaN(Number(paciente.altura)) || Number(paciente.altura) <= 0) errores.push("Altura inválida");
-    if (!paciente.presion_sistolica || isNaN(Number(paciente.presion_sistolica))) errores.push("Presión sistólica inválida");
-    if (!paciente.presion_diastolica || isNaN(Number(paciente.presion_diastolica))) errores.push("Presión diastólica inválida");
-    if (!paciente.frecuencia_cardiaca || isNaN(Number(paciente.frecuencia_cardiaca))) errores.push("Frecuencia cardíaca inválida");
-    if (!paciente.colesterol || isNaN(Number(paciente.colesterol))) errores.push("Colesterol inválido");
-    if (!paciente.glucosa || isNaN(Number(paciente.glucosa))) errores.push("Glucosa inválida");
-    if (paciente.cigarrillos_dia === undefined || isNaN(Number(paciente.cigarrillos_dia))) errores.push("Cigarrillos/día inválido");
-    if (paciente.anos_tabaquismo === undefined || isNaN(Number(paciente.anos_tabaquismo))) errores.push("Años de tabaquismo inválido");
-    if (!paciente.actividad_fisica) errores.push("Actividad física faltante");
-    if (!paciente.antecedentes_cardiacos) errores.push("Antecedentes cardíacos faltante");
-    if (!paciente.diabetes || !["si", "no"].includes(paciente.diabetes)) errores.push("Diabetes inválido");
-    if (!paciente.hipertension || !["si", "no"].includes(paciente.hipertension)) errores.push("Hipertensión inválido");
-    if (!paciente.numero_historia) errores.push("Número de historia clínica faltante");
-    return errores;
-  }
-
-  // Estado para errores de validación
-  const [validationErrors, setValidationErrors] = useState<any[]>([]);
-
   // Función para validar todos los pacientes antes de predecir
-  const validarAntesDePredecir = () => {
-    const erroresPorPaciente = processedPatients.map((p, idx) => ({
-      idx,
+  const validarAntesDePredecir = async () => {
+    const erroresPorPaciente = processedPatients.map((p) => ({
+      patientId: p.numero_historia,
       dni: p.dni,
       nombre: p.nombre,
       errores: validarPaciente(p)
@@ -419,19 +601,7 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
           <CardDescription className="text-indigo-100 dark:text-indigo-300">Integre registros médicos existentes al sistema</CardDescription>
         </CardHeader>
         <CardContent className="p-6 space-y-6 dark:bg-gray-900/80">
-          {error && (
-            <Alert variant="destructive" className="dark:bg-red-900/40 dark:border-red-700">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="dark:text-red-200">{error}</AlertDescription>
-            </Alert>
-          )}
-          
-          {success && (
-            <Alert className="dark:bg-green-900/40 dark:border-green-700">
-              <CheckCircle className="h-4 w-4" />
-              <AlertDescription className="dark:text-green-200">{success}</AlertDescription>
-            </Alert>
-          )}
+          {/* Los alerts se han movido a modales */}
 
           <div className="space-y-4">
             <div>
@@ -524,6 +694,83 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
       </Card>
 
       {/* Datos procesados y predicciones */}
+      {/* Modal de errores de validación */}
+      {/* Modal de Errores de Validación */}
+      <Dialog open={showValidationErrorsModal} onOpenChange={setShowValidationErrorsModal}>
+        <DialogContent className="max-w-2xl dark:bg-gray-900">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2 dark:text-red-400">
+              <AlertCircle className="h-5 w-5" />
+              Errores de Validación Encontrados
+            </DialogTitle>
+            <DialogDescription className="text-gray-500 dark:text-gray-400">
+              Por favor, corrija los siguientes errores antes de continuar con la predicción.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto space-y-4">
+            {validationErrors.map((error, index) => (
+              <div key={index} className="p-4 bg-red-50 rounded-lg dark:bg-red-900/30">
+                <p className="font-semibold text-gray-900 dark:text-gray-100">
+                  {error.nombre} (DNI: {error.dni})
+                </p>
+                <ul className="mt-2 list-disc pl-5 space-y-1">
+                  {error.errores.map((err, i) => (
+                    <li key={i} className="text-red-600 dark:text-red-400 text-sm">
+                      {err}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowValidationErrorsModal(false)} variant="outline">
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Error General */}
+      <Dialog open={!!error} onOpenChange={() => setError("")}>
+        <DialogContent className="dark:bg-gray-900">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2 dark:text-red-400">
+              <AlertCircle className="h-5 w-5" />
+              Error
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-700 dark:text-gray-300">{error}</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setError("")} variant="outline">
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Éxito */}
+      <Dialog open={!!success} onOpenChange={() => setSuccess("")}>
+        <DialogContent className="dark:bg-gray-900">
+          <DialogHeader>
+            <DialogTitle className="text-green-600 flex items-center gap-2 dark:text-green-400">
+              <CheckCircle className="h-5 w-5" />
+              Operación Exitosa
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-700 dark:text-gray-300">{success}</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setSuccess("")} variant="outline">
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Card className="shadow-xl border-0 bg-white dark:bg-gray-900 dark:shadow-2xl">
         <CardHeader className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-t-lg dark:from-gray-900 dark:to-gray-800">
           <CardTitle className="flex items-center gap-2">
@@ -533,6 +780,17 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
           <CardDescription className="text-emerald-100 dark:text-emerald-300">Registros médicos integrados y análisis predictivo</CardDescription>
         </CardHeader>
         <CardContent className="p-6 dark:bg-gray-900/80">
+
+          {/* Indicadores de progreso */}
+          {validating && (
+            <div className="space-y-2 mb-4">
+              <div className="flex justify-between text-sm">
+                <span className="dark:text-gray-200">Validando datos de pacientes...</span>
+                <span className="dark:text-gray-200">{Math.round(validationProgress)}%</span>
+              </div>
+              <Progress value={validationProgress} className="w-full dark:bg-gray-800 dark:[&>div]:bg-blue-600" />
+            </div>
+          )}
           <Tabs defaultValue="all" className="w-full">
             <TabsList className="grid w-full grid-cols-3 dark:bg-gray-800 dark:border-gray-700">
               <TabsTrigger value="all" className="dark:text-gray-100">Todos ({totalPatients})</TabsTrigger>
@@ -544,18 +802,28 @@ export function MedicalDataImport({ importedPatients, onFileUpload, onDataProces
               <div className="flex justify-between items-center">
                 <div className="text-sm text-gray-600 dark:text-gray-300">{totalPatients} pacientes totales</div>
                 <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    onClick={handleValidarYPredecir} 
-                    disabled={isPredicting || totalPatients === 0}
+                  <Button
+                    size="sm"
+                    onClick={handleMassPrediction}
+                    disabled={validating || isPredicting || totalPatients === 0}
                     className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 dark:from-purple-900 dark:to-pink-900 dark:hover:from-purple-800 dark:hover:to-pink-800 dark:text-white"
                   >
-                    {isPredicting ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {validating ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Validando...
+                      </>
+                    ) : isPredicting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Prediciendo...
+                      </>
                     ) : (
-                      <Brain className="mr-2 h-4 w-4" />
+                      <>
+                        <Brain className="mr-2 h-4 w-4" />
+                        Iniciar Predicción Masiva
+                      </>
                     )}
-                    {isPredicting ? "Prediciendo..." : "Predecir Masivamente"}
                   </Button>
                   <Button size="sm" variant="outline" onClick={loadExistingPatients} disabled={isLoadingExisting} className="dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700">
                     <RefreshCw className={`mr-2 h-4 w-4 ${isLoadingExisting ? 'animate-spin' : ''}`} />
